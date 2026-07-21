@@ -40,8 +40,11 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        const { useState, useEffect, useMemo } = React;
-        const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = window.Recharts || {};
+        const { useState, useEffect, useMemo, useRef } = React;
+        const { 
+            BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, 
+            PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area 
+        } = window.Recharts || {};
 
         const DEFAULT_LEVEL_RULES = [
             { levelCode: 'AF', levelName: 'Department/Director', ticketQty: 10, conditionMovie: 4, conditionSeat: 2 },
@@ -118,9 +121,155 @@
         const INITIAL_MOCK_DATA = [
             { Datetime: "1/2/2026 10:00:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Zootopia 2 (T)", No: "C2, C1", Showtime: "1/2/2026 10:30:00", Seat: 2 },
             { Datetime: "2/2/2026 14:15:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Avatar 3", No: "D5, D6", Showtime: "2/2/2026 15:00:00", Seat: 2 },
-            { Datetime: "3/3/2026 18:20:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Wicked", No: "E1, E2", Showtime: "3/3/2026 19:00:00", Seat: 2 },
-            { Datetime: "5/3/2026 11:30:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Zootopia 2 (T)", No: "A1, A2", Showtime: "5/3/2026 12:00:00", Seat: 2 }
+            { Datetime: "3/2/2026 18:20:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Wicked", No: "E1, E2", Showtime: "3/2/2026 19:00:00", Seat: 2 },
+            { Datetime: "5/2/2026 11:30:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Zootopia 2 (T)", No: "A1, A2", Showtime: "5/2/2026 12:00:00", Seat: 2 },
+            { Datetime: "10/2/2026 16:45:00", Depart: "Finance", Level: "CF", Barcode: "400001234", StaffName: "Anan Sukjai", Branch: "BKK", Moviename: "Gladiator II", No: "F3, F4", Showtime: "10/2/2026 17:30:00", Seat: 2 },
+            { Datetime: "12/2/2026 13:10:00", Depart: "IT", Level: "DF", Barcode: "500005678", StaffName: "Wichai Tech", Branch: "NKT", Moviename: "Avatar 3", No: "G1", Showtime: "12/2/2026 14:00:00", Seat: 1 },
+            { Datetime: "1/3/2026 10:00:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Moana 2", No: "B1, B2", Showtime: "1/3/2026 11:00:00", Seat: 2 },
+            { Datetime: "3/3/2026 15:30:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Avatar 3", No: "H7, H8", Showtime: "3/3/2026 16:30:00", Seat: 2 },
+            { Datetime: "15/3/2026 19:00:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Gladiator II", No: "C3, C4", Showtime: "15/3/2026 20:00:00", Seat: 2 },
+            { Datetime: "10/11/2025 14:00:00", Depart: "IT", Level: "CF", Barcode: "600009988", StaffName: "Nattapong Dev", Branch: "BKK", Moviename: "Dune: Part Two", No: "A5, A6", Showtime: "10/11/2025 15:00:00", Seat: 2 }
         ];
+
+        function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder }) {
+            const [isOpen, setIsOpen] = useState(false);
+            const [search, setSearch] = useState("");
+            const dropdownRef = useRef(null);
+
+            useEffect(() => {
+                function handleClickOutside(event) {
+                    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                        setIsOpen(false);
+                    }
+                }
+                document.addEventListener("mousedown", handleClickOutside);
+                return () => document.removeEventListener("mousedown", handleClickOutside);
+            }, []);
+
+            const filteredOptions = useMemo(() => {
+                if (!search.trim()) return options;
+                return options.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
+            }, [options, search]);
+
+            const toggleOption = (val) => {
+                let currentSelected = selectedValues.length === 0 ? [...options] : [...selectedValues];
+                let updated;
+                if (currentSelected.includes(val)) {
+                    updated = currentSelected.filter(item => item !== val);
+                } else {
+                    updated = [...currentSelected, val];
+                }
+                if (updated.length === options.length) {
+                    updated = [];
+                }
+                onChange(updated);
+            };
+
+            const handleSelectAll = () => {
+                onChange([]);
+            };
+
+            const getDisplayText = () => {
+                if (selectedValues.length === 0) {
+                    return `${placeholder} (ทั้งหมด ${options.length})`;
+                }
+                if (selectedValues.length === options.length) {
+                    return `ทั้งหมด (${options.length})`;
+                }
+                if (selectedValues.length === 1) {
+                    return selectedValues[0];
+                }
+                return `เลือกแล้ว ${selectedValues.length} รายการ`;
+            };
+
+            return (
+                <div className="relative" ref={dropdownRef}>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">{label}</label>
+                    <button
+                        type="button"
+                        onClick={() => setIsOpen(!isOpen)}
+                        className={`w-full bg-slate-900 border rounded-lg p-2 text-xs text-left flex items-center justify-between transition focus:outline-none ${
+                            selectedValues.length > 0 
+                                ? 'border-indigo-500 text-indigo-300 font-semibold bg-indigo-950/40' 
+                                : 'border-slate-700 text-slate-200 hover:border-slate-600'
+                        }`}
+                    >
+                        <span className="truncate pr-2">{getDisplayText()}</span>
+                        <span className="text-[10px] text-slate-400 shrink-0">{isOpen ? '▲' : '▼'}</span>
+                    </button>
+
+                    {isOpen && (
+                        <div className="absolute z-50 mt-1 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-2.5 text-xs text-slate-200 left-0 max-h-80 flex flex-col">
+                            <div className="mb-2">
+                                <input
+                                    type="text"
+                                    placeholder="🔍 ค้นหาในรายการ..."
+                                    value={search}
+                                    onChange={(e) => setSearch(e.target.value)}
+                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                />
+                            </div>
+
+                            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700 text-[11px]">
+                                <button
+                                    type="button"
+                                    onClick={handleSelectAll}
+                                    className={`font-semibold hover:underline ${selectedValues.length === 0 ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
+                                >
+                                    ✓ เลือกทั้งหมด
+                                </button>
+                                {selectedValues.length > 0 && (
+                                    <button
+                                        type="button"
+                                        onClick={() => onChange([])}
+                                        className="text-rose-400 hover:underline font-semibold"
+                                    >
+                                        ✕ ล้างการเลือก ({selectedValues.length})
+                                    </button>
+                                )}
+                            </div>
+
+                            <div className="overflow-y-auto custom-scrollbar flex-1 space-y-1 pr-1 max-h-48">
+                                {filteredOptions.length === 0 ? (
+                                    <p className="text-slate-500 text-center py-2 text-[11px]">ไม่พบข้อมูล</p>
+                                ) : (
+                                    filteredOptions.map((opt) => {
+                                        const isChecked = selectedValues.length === 0 || selectedValues.includes(opt);
+                                        return (
+                                            <label
+                                                key={opt}
+                                                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-700/60 cursor-pointer text-xs select-none transition"
+                                            >
+                                                <input
+                                                    type="checkbox"
+                                                    checked={isChecked}
+                                                    onChange={() => toggleOption(opt)}
+                                                    className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer shrink-0"
+                                                />
+                                                <span className={`truncate ${isChecked ? 'text-white font-medium' : 'text-slate-400'}`}>
+                                                    {opt}
+                                                </span>
+                                            </label>
+                                        );
+                                    })
+                                )}
+                            </div>
+
+                            <div className="pt-2 mt-2 border-t border-slate-700/80 flex items-center justify-between text-[10px] text-slate-400">
+                                <span>{selectedValues.length === 0 ? `เลือกทั้งหมด (${options.length})` : `เลือก ${selectedValues.length} จาก ${options.length}`}</span>
+                                <button
+                                    type="button"
+                                    onClick={() => setIsOpen(false)}
+                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium transition"
+                                >
+                                    ตกลง
+                                </button>
+                            </div>
+                        </div>
+                    )}
+                </div>
+            );
+        }
 
         function App() {
             const [fileList, setFileList] = useState([
@@ -142,16 +291,25 @@
             const [selectedAuditRecord, setSelectedAuditRecord] = useState(null);
             const [selectedAuditMonth, setSelectedAuditMonth] = useState("ALL");
 
+            // Search Term
             const [searchTerm, setSearchTerm] = useState("");
-            const [selectedDepart, setSelectedDepart] = useState("ALL");
+            
+            // Multi-Select Filters
+            const [selectedDeparts, setSelectedDeparts] = useState([]); 
+            const [selectedLevels, setSelectedLevels] = useState([]);   
             const [selectedBranches, setSelectedBranches] = useState([]); 
-            const [selectedMovie, setSelectedMovie] = useState("ALL");
-            const [selectedLevel, setSelectedLevel] = useState("ALL");
 
+            // Single Movie Selection
+            const [selectedMovie, setSelectedMovie] = useState("ALL");
+
+            // Date Filters
             const [startDate, setStartDate] = useState("");
             const [endDate, setEndDate] = useState("");
             const [tempStartDate, setTempStartDate] = useState("");
             const [tempEndDate, setTempEndDate] = useState("");
+
+            // Analytics Trend Toggle (daily / monthly / yearly)
+            const [trendGroup, setTrendGroup] = useState("monthly");
 
             const [currentPage, setCurrentPage] = useState(1);
             const [itemsPerPage, setItemsPerPage] = useState(20);
@@ -236,56 +394,40 @@
 
             const resetAllFilters = () => {
                 setSearchTerm("");
-                setSelectedDepart("ALL");
+                setSelectedDeparts([]);
+                setSelectedLevels([]);
                 setSelectedBranches([]);
                 setSelectedMovie("ALL");
-                setSelectedLevel("ALL");
                 setTempStartDate("");
                 setTempEndDate("");
                 setStartDate("");
                 setEndDate("");
                 setCurrentPage(1);
+                showNotification('ล้างตัวกรองทั้งหมดเรียบร้อยแล้ว', 'info');
+            };
+
+            const handleResetDateFilters = () => {
+                setTempStartDate("");
+                setTempEndDate("");
+                setStartDate("");
+                setEndDate("");
+                setCurrentPage(1);
+                showNotification('ล้างตัวกรองวันที่เรียบร้อยแล้ว', 'info');
             };
 
             const handleApplyDateFilter = () => {
                 setStartDate(tempStartDate);
                 setEndDate(tempEndDate);
                 setCurrentPage(1);
+                showNotification('นำเข้าตัวกรองวันที่แล้ว', 'success');
             };
 
             const activeRawData = useMemo(() => {
                 return fileList.filter(f => f.enabled).flatMap(f => f.data);
             }, [fileList]);
 
-            const departmentsList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Depart).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            const branchesList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Branch).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            const moviesList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Moviename).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            const filteredData = useMemo(() => {
+            const dateFilteredData = useMemo(() => {
                 return activeRawData.filter(item => {
-                    if (searchTerm) {
-                        const term = searchTerm.toLowerCase();
-                        const matchName = String(item.StaffName || "").toLowerCase().includes(term);
-                        const matchCode = String(item.Barcode || "").toLowerCase().includes(term);
-                        const matchMovie = String(item.Moviename || "").toLowerCase().includes(term);
-                        if (!matchName && !matchCode && !matchMovie) return false;
-                    }
-                    if (selectedDepart !== "ALL" && item.Depart !== selectedDepart) return false;
-                    if (selectedBranches.length > 0 && !selectedBranches.includes(item.Branch)) return false;
-                    if (selectedMovie !== "ALL" && item.Moviename !== selectedMovie) return false;
-                    if (selectedLevel !== "ALL" && item.Level !== selectedLevel) return false;
-                    
                     const dt = parseThaiCustomDate(item.Datetime);
                     if (startDate && dt) {
                         const s = new Date(startDate);
@@ -299,7 +441,83 @@
                     }
                     return true;
                 });
-            }, [activeRawData, searchTerm, selectedDepart, selectedBranches, selectedMovie, selectedLevel, startDate, endDate]);
+            }, [activeRawData, startDate, endDate]);
+
+            // Requirement 1: Movies list reference strictly based on dateFilteredData
+            const moviesList = useMemo(() => {
+                const set = new Set(dateFilteredData.map(d => d.Moviename).filter(Boolean));
+                return Array.from(set).sort();
+            }, [dateFilteredData]);
+
+            // Reset selected movie if it's no longer available in the date range
+            useEffect(() => {
+                if (selectedMovie !== "ALL" && !moviesList.includes(selectedMovie)) {
+                    setSelectedMovie("ALL");
+                }
+            }, [moviesList, selectedMovie]);
+
+            const departmentsList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => d.Depart).filter(Boolean));
+                return Array.from(set).sort();
+            }, [activeRawData]);
+
+            const branchesList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => d.Branch).filter(Boolean));
+                return Array.from(set).sort();
+            }, [activeRawData]);
+
+            const levelsList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => String(d.Level || "").toUpperCase()).filter(Boolean));
+                levelRules.forEach(r => set.add(r.levelCode.toUpperCase()));
+                return Array.from(set).sort();
+            }, [activeRawData, levelRules]);
+
+            const filteredData = useMemo(() => {
+                return activeRawData.filter(item => {
+                    // Search term filter
+                    if (searchTerm) {
+                        const term = searchTerm.toLowerCase();
+                        const matchName = String(item.StaffName || "").toLowerCase().includes(term);
+                        const matchCode = String(item.Barcode || "").toLowerCase().includes(term);
+                        const matchMovie = String(item.Moviename || "").toLowerCase().includes(term);
+                        if (!matchName && !matchCode && !matchMovie) return false;
+                    }
+
+                    // Requirement 2: Multi-select Department Filter
+                    if (selectedDeparts.length > 0 && !selectedDeparts.includes(item.Depart)) {
+                        return false;
+                    }
+
+                    // Requirement 2: Multi-select Level Filter
+                    if (selectedLevels.length > 0 && !selectedLevels.includes(String(item.Level || "").toUpperCase())) {
+                        return false;
+                    }
+
+                    // Multi-select Branch Filter
+                    if (selectedBranches.length > 0 && !selectedBranches.includes(item.Branch)) {
+                        return false;
+                    }
+
+                    // Movie Filter
+                    if (selectedMovie !== "ALL" && item.Moviename !== selectedMovie) {
+                        return false;
+                    }
+
+                    // Date Filters
+                    const dt = parseThaiCustomDate(item.Datetime);
+                    if (startDate && dt) {
+                        const s = new Date(startDate);
+                        s.setHours(0, 0, 0, 0);
+                        if (dt < s) return false;
+                    }
+                    if (endDate && dt) {
+                        const e = new Date(endDate);
+                        e.setHours(23, 59, 59, 999);
+                        if (dt > e) return false;
+                    }
+                    return true;
+                });
+            }, [activeRawData, searchTerm, selectedDeparts, selectedLevels, selectedBranches, selectedMovie, startDate, endDate]);
 
             const auditSummary = useMemo(() => {
                 const map = {};
@@ -348,13 +566,92 @@
                 return results.sort((a, b) => b.monthPeriod.localeCompare(a.monthPeriod));
             }, [filteredData, levelRules, selectedAuditMonth]);
 
-            const availableAuditMonths = useMemo(() => {
-                const set = new Set();
-                filteredData.forEach(row => {
-                    const mk = getYearMonthKey(row.Datetime);
-                    if (mk) set.add(mk);
+            const analyticsKPIs = useMemo(() => {
+                const totalActiveEmployeesMap = new Map();
+                activeRawData.forEach(d => {
+                    const bc = cleanBarcode(d.Barcode);
+                    if (bc && !totalActiveEmployeesMap.has(bc)) {
+                        totalActiveEmployeesMap.set(bc, d);
+                    }
                 });
-                return Array.from(set).sort().reverse();
+                
+                const activeUsersSet = new Set(filteredData.map(d => cleanBarcode(d.Barcode)).filter(Boolean));
+                
+                let eligibleEmployees = Array.from(totalActiveEmployeesMap.values());
+                if (selectedDeparts.length > 0) {
+                    eligibleEmployees = eligibleEmployees.filter(e => selectedDeparts.includes(e.Depart));
+                }
+                if (selectedLevels.length > 0) {
+                    eligibleEmployees = eligibleEmployees.filter(e => selectedLevels.includes(String(e.Level || "").toUpperCase()));
+                }
+                if (selectedBranches.length > 0) {
+                    eligibleEmployees = eligibleEmployees.filter(e => selectedBranches.includes(e.Branch));
+                }
+
+                const totalEligibleCount = eligibleEmployees.length || totalActiveEmployeesMap.size;
+                const usedCount = activeUsersSet.size;
+                const unusedCount = Math.max(0, totalEligibleCount - usedCount);
+
+                const totalSeatsUsed = filteredData.reduce((acc, curr) => acc + Number(curr.Seat || 1), 0);
+                
+                let totalAllocatedQuota = 0;
+                eligibleEmployees.forEach(emp => {
+                    const rule = levelRules.find(r => r.levelCode.toUpperCase() === String(emp.Level || "").toUpperCase());
+                    totalAllocatedQuota += rule ? rule.ticketQty : 0;
+                });
+
+                if (totalAllocatedQuota === 0) {
+                    totalAllocatedQuota = totalEligibleCount * 6;
+                }
+
+                const utilizationRate = totalAllocatedQuota > 0 ? ((totalSeatsUsed / totalAllocatedQuota) * 100).toFixed(1) : 0;
+
+                return {
+                    totalClaims: filteredData.length,
+                    totalSeatsUsed,
+                    totalEligibleCount,
+                    usedCount,
+                    unusedCount,
+                    totalAllocatedQuota,
+                    utilizationRate: Math.min(100, Number(utilizationRate))
+                };
+            }, [filteredData, activeRawData, levelRules, selectedDeparts, selectedLevels, selectedBranches]);
+
+            const trendChartData = useMemo(() => {
+                const map = {};
+                filteredData.forEach(d => {
+                    const dt = parseThaiCustomDate(d.Datetime);
+                    if (!dt) return;
+
+                    let key = "";
+                    if (trendGroup === "daily") {
+                        const day = String(dt.getDate()).padStart(2, '0');
+                        const month = String(dt.getMonth() + 1).padStart(2, '0');
+                        key = `${day}/${month}/${dt.getFullYear()}`;
+                    } else if (trendGroup === "yearly") {
+                        key = `${dt.getFullYear()}`;
+                    } else { 
+                        const month = String(dt.getMonth() + 1).padStart(2, '0');
+                        key = `${dt.getFullYear()}-${month}`;
+                    }
+
+                    if (!map[key]) {
+                        map[key] = { date: key, seats: 0, claims: 0, rawDate: dt.getTime() };
+                    }
+                    map[key].seats += Number(d.Seat || 1);
+                    map[key].claims += 1;
+                });
+
+                return Object.values(map).sort((a, b) => a.rawDate - b.rawDate);
+            }, [filteredData, trendGroup]);
+
+            const chartLevelData = useMemo(() => {
+                const map = {};
+                filteredData.forEach(d => {
+                    const lvl = String(d.Level || "N/A").toUpperCase();
+                    map[lvl] = (map[lvl] || 0) + Number(d.Seat || 1);
+                });
+                return Object.keys(map).map(k => ({ name: k, seats: map[k] })).sort((a, b) => b.seats - a.seats);
             }, [filteredData]);
 
             const chartDepartData = useMemo(() => {
@@ -363,7 +660,16 @@
                     const dep = d.Depart || "ไม่ระบุ";
                     map[dep] = (map[dep] || 0) + Number(d.Seat || 1);
                 });
-                return Object.keys(map).map(k => ({ name: k, seats: map[k] }));
+                return Object.keys(map).map(k => ({ name: k, seats: map[k] })).sort((a, b) => b.seats - a.seats);
+            }, [filteredData]);
+
+            const chartBranchData = useMemo(() => {
+                const map = {};
+                filteredData.forEach(d => {
+                    const br = d.Branch || "ไม่ระบุ";
+                    map[br] = (map[br] || 0) + Number(d.Seat || 1);
+                });
+                return Object.keys(map).map(k => ({ name: k, seats: map[k] })).sort((a, b) => b.seats - a.seats);
             }, [filteredData]);
 
             const topMoviesData = useMemo(() => {
@@ -372,7 +678,16 @@
                     const m = d.Moviename || "N/A";
                     map[m] = (map[m] || 0) + Number(d.Seat || 1);
                 });
-                return Object.keys(map).map(k => ({ name: k, count: map[k] })).sort((a, b) => b.count - a.count).slice(0, 5);
+                return Object.keys(map).map(k => ({ name: k, count: map[k] })).sort((a, b) => b.count - a.count).slice(0, 6);
+            }, [filteredData]);
+
+            const availableAuditMonths = useMemo(() => {
+                const set = new Set();
+                filteredData.forEach(row => {
+                    const mk = getYearMonthKey(row.Datetime);
+                    if (mk) set.add(mk);
+                });
+                return Array.from(set).sort().reverse();
             }, [filteredData]);
 
             const exportToExcel = (dataToExport, fileName, sheetName = "Data") => {
@@ -455,31 +770,31 @@
                                 <div className="flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-700/80 text-xs font-semibold">
                                     <button
                                         onClick={() => setActiveTab("dashboard")}
-                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
-                                        📊 ภาพรวม
+                                        📊 Dashboard Analytics
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("audit")}
-                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'audit' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'audit' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         🎯 ตรวจสิทธิ์คงเหลือ
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("logs")}
-                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         📋 รายการเบิก ({filteredData.length})
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("rules")}
-                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         ⚙️ เกณฑ์สิทธิ์
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("executive")}
-                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'executive' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'executive' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         📸 รายงานผู้บริหาร
                                     </button>
@@ -488,8 +803,8 @@
                         </div>
                     </header>
 
+                    {}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex-1 w-full">
-                        {/* Control Bar & File Operations */}
                         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6 space-y-4 shadow-lg">
                             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-700/60 pb-3">
                                 <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
@@ -516,51 +831,64 @@
 
                                 <button 
                                     onClick={resetAllFilters}
-                                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold rounded-lg transition self-end lg:self-auto"
+                                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 border border-rose-500/30 text-xs font-semibold rounded-lg transition self-end lg:self-auto flex items-center gap-1"
                                 >
-                                    🔄 ล้างตัวกรองทั้งหมด
+                                    <span>🔄 ล้างตัวกรองทั้งหมด</span>
                                 </button>
                             </div>
 
-                            {/* Filters Bar */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
-                                <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🔍 ค้นหา พนักงาน/Barcode/หนัง</label>
+                            {/* Filters Bar with Excel-like Multi-Select Level & Department */}
+                            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
+                                <div className="lg:col-span-1">
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🔍 ค้นหา พนักงาน/Barcode</label>
                                     <input 
                                         type="text"
-                                        placeholder="ชื่อ, Barcode, ภาพยนตร์..."
+                                        placeholder="ชื่อ, Barcode, หนัง..."
                                         value={searchTerm}
                                         onChange={(e) => { setSearchTerm(e.target.value); setCurrentPage(1); }}
                                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                                     />
                                 </div>
 
+                                {/* Multi-Select Level */}
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🏢 แผนก (Department)</label>
-                                    <select
-                                        value={selectedDepart}
-                                        onChange={(e) => { setSelectedDepart(e.target.value); setCurrentPage(1); }}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                    >
-                                        <option value="ALL">ทั้งหมด (All Departments)</option>
-                                        {departmentsList.map(dep => <option key={dep} value={dep}>{dep}</option>)}
-                                    </select>
+                                    <MultiSelectDropdown
+                                        label="🏷️ ระดับตำแหน่ง (Level)"
+                                        options={levelsList}
+                                        selectedValues={selectedLevels}
+                                        onChange={(vals) => { setSelectedLevels(vals); setCurrentPage(1); }}
+                                        placeholder="ทุก Level"
+                                    />
                                 </div>
 
+                                {/* Multi-Select Department */}
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🎬 ภาพยนตร์ (Movie)</label>
+                                    <MultiSelectDropdown
+                                        label="🏢 แผนก (Department)"
+                                        options={departmentsList}
+                                        selectedValues={selectedDeparts}
+                                        onChange={(vals) => { setSelectedDeparts(vals); setCurrentPage(1); }}
+                                        placeholder="ทุกแผนก"
+                                    />
+                                </div>
+
+                                {/* Movie Filter referenced strictly to Date Filtered Range */}
+                                <div>
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
+                                        🎬 สวัสดิการ/ภาพยนตร์ {startDate || endDate ? "(ตามช่วงวัน)" : ""}
+                                    </label>
                                     <select
                                         value={selectedMovie}
                                         onChange={(e) => { setSelectedMovie(e.target.value); setCurrentPage(1); }}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
                                     >
-                                        <option value="ALL">ทุกเรื่อง (All Movies)</option>
+                                        <option value="ALL">ทุกเรื่อง ({moviesList.length} เรื่องในระบบ)</option>
                                         {moviesList.map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                 </div>
 
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 จากวันที่ (Start Date)</label>
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 จากวันที่ (Start)</label>
                                     <input 
                                         type="date"
                                         value={tempStartDate}
@@ -570,7 +898,7 @@
                                 </div>
 
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 ถึงวันที่ (End Date)</label>
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 ถึงวันที่ (End)</label>
                                     <input 
                                         type="date"
                                         value={tempEndDate}
@@ -579,15 +907,45 @@
                                     />
                                 </div>
 
-                                <div className="flex items-end">
+                                <div className="flex items-end gap-1.5">
                                     <button
                                         onClick={handleApplyDateFilter}
-                                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow"
+                                        className="flex-1 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow"
+                                        title="กรองตามวันที่ระบุ"
                                     >
                                         🔍 กรองวันที่
                                     </button>
+                                    <button
+                                        onClick={handleResetDateFilters}
+                                        className="px-2.5 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold rounded-lg transition border border-slate-600"
+                                        title="รีเซ็ตวันที่"
+                                    >
+                                        🔄
+                                    </button>
                                 </div>
                             </div>
+
+                            {/* Active Filter Tags Summary */}
+                            {(selectedLevels.length > 0 || selectedDeparts.length > 0 || selectedBranches.length > 0) && (
+                                <div className="pt-2 border-t border-slate-700/50 flex flex-wrap items-center gap-2 text-xs">
+                                    <span className="text-slate-400 text-[11px] font-semibold">เงื่อนไขที่เลือก:</span>
+                                    {selectedLevels.length > 0 && (
+                                        <span className="px-2 py-0.5 bg-indigo-900/60 border border-indigo-500/40 text-indigo-300 rounded-full text-[11px]">
+                                            Level: {selectedLevels.join(", ")}
+                                        </span>
+                                    )}
+                                    {selectedDeparts.length > 0 && (
+                                        <span className="px-2 py-0.5 bg-emerald-900/60 border border-emerald-500/40 text-emerald-300 rounded-full text-[11px]">
+                                            แผนก: {selectedDeparts.join(", ")}
+                                        </span>
+                                    )}
+                                    {selectedBranches.length > 0 && (
+                                        <span className="px-2 py-0.5 bg-amber-900/60 border border-amber-500/40 text-amber-300 rounded-full text-[11px]">
+                                            สาขา: {selectedBranches.join(", ")}
+                                        </span>
+                                    )}
+                                </div>
+                            )}
 
                             {/* Branch Multi-select Tags */}
                             {branchesList.length > 0 && (
@@ -653,35 +1011,129 @@
                             </div>
                         )}
 
-                        {/* Tab 1: Dashboard */}
+                        {}
                         {activeTab === "dashboard" && (
                             <div className="space-y-6">
+                                {/* Enhanced Key Analytics Cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">🎟️ จำนวนการเบิกสิทธิ์ทั้งหมด</div>
-                                        <div className="text-2xl font-bold text-white">{filteredData.length.toLocaleString()} <span className="text-xs font-normal text-slate-400">ครั้ง</span></div>
+                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md relative overflow-hidden">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1 flex items-center justify-between">
+                                            <span>🎟️ จำนวนการใช้สิทธิ์สวัสดิการรวม</span>
+                                            <span className="text-[10px] bg-indigo-500/20 text-indigo-300 px-2 py-0.5 rounded-full font-mono">Total Claims</span>
+                                        </div>
+                                        <div className="text-2xl font-bold text-white mt-1">
+                                            {analyticsKPIs.totalSeatsUsed.toLocaleString()} <span className="text-xs font-normal text-slate-400">ที่นั่ง</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-2">จากทั้งหมด {analyticsKPIs.totalClaims.toLocaleString()} ครั้งการแลกสิทธิ์</p>
                                     </div>
-                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">💺 จำนวนที่นั่งรวมที่ใช้งาน</div>
-                                        <div className="text-2xl font-bold text-emerald-400">
-                                            {filteredData.reduce((acc, curr) => acc + Number(curr.Seat || 1), 0).toLocaleString()} <span className="text-xs font-normal text-slate-400">ที่นั่ง</span>
+
+                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md relative overflow-hidden">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1 flex items-center justify-between">
+                                            <span>📈 อัตราการใช้สิทธิ์ (%)</span>
+                                            <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono">Utilization Rate</span>
+                                        </div>
+                                        <div className="text-2xl font-bold text-emerald-400 mt-1">
+                                            {analyticsKPIs.utilizationRate}%
+                                        </div>
+                                        <div className="w-full bg-slate-700 h-2 rounded-full mt-2.5 overflow-hidden">
+                                            <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, analyticsKPIs.utilizationRate)}%` }}></div>
                                         </div>
                                     </div>
-                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">👥 พนักงานที่ใช้สิทธิ์แล้ว</div>
-                                        <div className="text-2xl font-bold text-indigo-400">{new Set(filteredData.map(d => d.Barcode)).size.toLocaleString()} <span className="text-xs font-normal text-slate-400">คน</span></div>
+
+                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md relative overflow-hidden">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1 flex items-center justify-between">
+                                            <span>👥 ผู้ใช้สิทธิ์ vs ผู้ยังไม่ใช้สิทธิ์</span>
+                                            <span className="text-[10px] bg-amber-500/20 text-amber-300 px-2 py-0.5 rounded-full font-mono">Staff Ratio</span>
+                                        </div>
+                                        <div className="flex items-baseline gap-2 mt-1">
+                                            <span className="text-2xl font-bold text-indigo-400">{analyticsKPIs.usedCount}</span>
+                                            <span className="text-xs text-slate-400">ใช้สิทธิ์แล้ว /</span>
+                                            <span className="text-lg font-bold text-slate-400">{analyticsKPIs.unusedCount}</span>
+                                            <span className="text-xs text-slate-400">ยังไม่ใช้</span>
+                                        </div>
+                                        <p className="text-[11px] text-slate-400 mt-2">พนักงานทั้งหมดตามเงื่อนไข: {analyticsKPIs.totalEligibleCount} คน</p>
                                     </div>
-                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
-                                        <div className="text-2xl font-bold text-rose-400">
+
+                                    <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md relative overflow-hidden">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1 flex items-center justify-between">
+                                            <span>⚠️ จำนวนที่ใช้เกินโควตา</span>
+                                            <span className="text-[10px] bg-rose-500/20 text-rose-300 px-2 py-0.5 rounded-full font-mono">Quota Exceeded</span>
+                                        </div>
+                                        <div className="text-2xl font-bold text-rose-400 mt-1">
                                             {auditSummary.filter(a => a.isExceeded).length.toLocaleString()} <span className="text-xs font-normal text-slate-400">รายการเดือน</span>
                                         </div>
+                                        <p className="text-[11px] text-slate-400 mt-2">ตรวจสอบในเมนู "ตรวจสิทธิ์คงเหลือ"</p>
+                                    </div>
+                                </div>
+
+                                {/* Main Analytics Trend Chart */}
+                                <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md space-y-4">
+                                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
+                                        <div>
+                                            <h3 className="text-sm font-bold text-white flex items-center gap-2">
+                                                <span>📈 สถิติสรุปแนวโน้มการใช้งานสวัสดิการ (Usage Trend Analytics)</span>
+                                            </h3>
+                                            <p className="text-xs text-slate-400">วิเคราะห์ปริมาณการแลกรับสิทธิ์และจำนวนที่นั่งตามช่วงเวลา</p>
+                                        </div>
+                                        <div className="flex items-center bg-slate-900 p-1 rounded-lg border border-slate-700 text-xs font-semibold">
+                                            <button
+                                                onClick={() => setTrendGroup("daily")}
+                                                className={`px-3 py-1 rounded transition ${trendGroup === 'daily' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                            >
+                                                รายวัน
+                                            </button>
+                                            <button
+                                                onClick={() => setTrendGroup("monthly")}
+                                                className={`px-3 py-1 rounded transition ${trendGroup === 'monthly' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                            >
+                                                รายเดือน
+                                            </button>
+                                            <button
+                                                onClick={() => setTrendGroup("yearly")}
+                                                className={`px-3 py-1 rounded transition ${trendGroup === 'yearly' ? 'bg-indigo-600 text-white' : 'text-slate-400 hover:text-white'}`}
+                                            >
+                                                รายปี
+                                            </button>
+                                        </div>
+                                    </div>
+
+                                    <div className="h-72">
+                                        <ResponsiveContainer width="100%" height="100%">
+                                            <AreaChart data={trendChartData}>
+                                                <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+                                                <XAxis dataKey="date" stroke="#94a3b8" fontSize={11} />
+                                                <YAxis stroke="#94a3b8" fontSize={11} />
+                                                <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }} />
+                                                <Area type="monotone" dataKey="seats" name="จำนวนที่นั่งที่ใช้" stroke="#6366f1" fill="#6366f1" fillOpacity={0.2} strokeWidth={2} />
+                                                <Area type="monotone" dataKey="claims" name="จำนวนครั้งที่แลก" stroke="#10b981" fill="#10b981" fillOpacity={0.2} strokeWidth={2} />
+                                            </AreaChart>
+                                        </ResponsiveContainer>
                                     </div>
                                 </div>
 
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    {/* Breakdown by Level */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md">
-                                        <h3 className="text-sm font-bold text-white mb-4">📊 สถิติการใช้ที่นั่งแยกตามแผนก (Department)</h3>
+                                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                            <span>🏷️ สถิติการใช้ที่นั่งแยกตามระดับตำแหน่ง (Level)</span>
+                                        </h3>
+                                        <div className="h-64">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={chartLevelData}>
+                                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                                                    <YAxis stroke="#94a3b8" fontSize={11} />
+                                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }} />
+                                                    <Bar dataKey="seats" fill="#8b5cf6" radius={[4, 4, 0, 0]} name="ที่นั่ง" />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* Breakdown by Department */}
+                                    <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md">
+                                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                            <span>🏢 สถิติการใช้ที่นั่งแยกตามแผนก (Department)</span>
+                                        </h3>
                                         <div className="h-64">
                                             <ResponsiveContainer width="100%" height="100%">
                                                 <BarChart data={chartDepartData}>
@@ -694,10 +1146,30 @@
                                         </div>
                                     </div>
 
+                                    {/* Breakdown by Branch */}
+                                    <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md">
+                                        <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                            <span>📍 สถิติการใช้ที่นั่งแยกตามสาขา (Branch)</span>
+                                        </h3>
+                                        <div className="h-64">
+                                            <ResponsiveContainer width="100%" height="100%">
+                                                <BarChart data={chartBranchData}>
+                                                    <XAxis dataKey="name" stroke="#94a3b8" fontSize={11} />
+                                                    <YAxis stroke="#94a3b8" fontSize={11} />
+                                                    <Tooltip contentStyle={{ backgroundColor: '#0f172a', borderColor: '#334155', borderRadius: '8px', color: '#fff' }} />
+                                                    <Bar dataKey="seats" fill="#10b981" radius={[4, 4, 0, 0]} name="ที่นั่ง" />
+                                                </BarChart>
+                                            </ResponsiveContainer>
+                                        </div>
+                                    </div>
+
+                                    {/* Breakdown by Movie / Welfare Type */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md flex flex-col justify-between">
                                         <div>
-                                            <h3 className="text-sm font-bold text-white mb-4">🎬 5 อันดับภาพยนตร์ที่มีการแลกรับสูงสุด</h3>
-                                            <div className="space-y-3">
+                                            <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
+                                                <span>🎬 อันดับสวัสดิการ/ภาพยนตร์ที่มีการใช้สิทธิ์สูงสุด</span>
+                                            </h3>
+                                            <div className="space-y-2.5">
                                                 {topMoviesData.map((m, idx) => (
                                                     <div key={m.name} className="flex items-center justify-between p-2.5 bg-slate-900/60 rounded-lg border border-slate-700/60">
                                                         <div className="flex items-center gap-3">
@@ -714,13 +1186,13 @@
                             </div>
                         )}
 
-                        {/* Tab 2: Audit Monthly Entitlement */}
+                        {}
                         {activeTab === "audit" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
                                     <div>
                                         <h3 className="text-base font-bold text-white">🎯 รายงานสรุปการตรวจสอบสิทธิ์คงเหลือรายบุคคล (แยกตามเดือน)</h3>
-                                        <p className="text-xs text-slate-400">เปรียบเทียบจำนวนการเบิกสิทธิ์จริงรายเดือน กับโควตาสิทธิ์ประจำตำแหน่ง (Master Rules แบบตัดรอบรายเดือนถูกต้อง)</p>
+                                        <p className="text-xs text-slate-400">เปรียบเทียบจำนวนการเบิกสิทธิ์จริงรายเดือน กับโควตาสิทธิ์ประจำตำแหน่ง (Master Rules แบบตัดรอบรายเดือน)</p>
                                     </div>
                                     <div className="flex items-center gap-2">
                                         <select
@@ -759,7 +1231,7 @@
                                         <tbody className="divide-y divide-slate-700/60">
                                             {auditSummary.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="10" className="p-6 text-center text-slate-500">ไม่พบข้อมูลการใช้สิทธิ์ตามเงื่อนไข</td>
+                                                    <td colSpan="10" className="p-6 text-center text-slate-500">ไม่พบข้อมูลการใช้สิทธิ์ตามเงื่อนไขตัวกรองที่เลือก</td>
                                                 </tr>
                                             ) : (
                                                 auditSummary.map(item => (
@@ -800,13 +1272,13 @@
                             </div>
                         )}
 
-                        {/* Tab 3: Detailed Logs */}
+                        {}
                         {activeTab === "logs" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
                                     <div>
                                         <h3 className="text-base font-bold text-white">📋 รายการประวัติการเบิกสิทธิ์สวัสดิการ (Detailed Welfare Logs)</h3>
-                                        <p className="text-xs text-slate-400">แสดงข้อมูลทุกรายการเบิกสิทธิ์ที่ตรงตามเงื่อนไขตัวกรอง</p>
+                                        <p className="text-xs text-slate-400">แสดงข้อมูลประวัติรายการเบิกสิทธิ์ทั้งหมดตาม Filter ที่เลือกในปัจจุบัน</p>
                                     </div>
                                     <div className="flex items-center gap-2 text-xs">
                                         <span className="text-slate-400">แสดงหน้าละ:</span>
@@ -833,7 +1305,7 @@
                                                 <th className="p-3">Barcode</th>
                                                 <th className="p-3">ชื่อพนักงาน</th>
                                                 <th className="p-3">สาขา</th>
-                                                <th className="p-3">ชื่อภาพยนตร์</th>
+                                                <th className="p-3">ชื่อสวัสดิการ/ภาพยนตร์</th>
                                                 <th className="p-3">เลขที่นั่ง</th>
                                                 <th className="p-3 text-center">จำนวนที่นั่ง</th>
                                             </tr>
@@ -848,7 +1320,7 @@
                                                     <tr key={idx} className="hover:bg-slate-700/40 transition">
                                                         <td className="p-3 text-slate-400">{formatDateDisplay(row.Datetime)}</td>
                                                         <td className="p-3 font-semibold text-indigo-300">{row.Depart}</td>
-                                                        <td className="p-3"><span className="px-1.5 py-0.5 bg-slate-700 text-slate-200 rounded text-[11px]">{row.Level}</span></td>
+                                                        <td className="p-3"><span className="px-1.5 py-0.5 bg-slate-700 text-slate-200 rounded text-[11px] font-bold">{row.Level}</span></td>
                                                         <td className="p-3 font-mono text-slate-400">{cleanBarcode(row.Barcode)}</td>
                                                         <td className="p-3 font-semibold text-white">{row.StaffName}</td>
                                                         <td className="p-3 text-slate-300">{row.Branch}</td>
@@ -886,7 +1358,7 @@
                             </div>
                         )}
 
-                        {/* Tab 4: Rules */}
+                        {}
                         {activeTab === "rules" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div>
@@ -921,14 +1393,14 @@
                             </div>
                         )}
 
-                        {/* Tab 5: Executive View */}
+                        {}
                         {activeTab === "executive" && (
                             <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl p-6 shadow-2xl space-y-6">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
                                     <div>
                                         <div className="flex items-center gap-2">
                                             <span className="p-2 bg-indigo-600 rounded-lg text-white text-lg">📸</span>
-                                            <h3 className="text-lg font-bold text-white">รายงานผู้บริหาร (Executive View)</h3>
+                                            <h3 className="text-lg font-bold text-white">รายงานผู้บริหาร (Executive Report View)</h3>
                                         </div>
                                         <p className="text-xs text-slate-400 mt-1">
                                             ช่วงเวลาข้อมูล: <span className="text-emerald-400 font-semibold">{startDate ? startDate : 'เริ่มต้น'} ถึง {endDate ? endDate : 'ปัจจุบัน'}</span> • กรองแล้ว {filteredData.length} รายการ
@@ -958,12 +1430,12 @@
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">💺 จำนวนที่นั่งรวมที่ใช้</div>
                                         <div className="text-2xl font-bold text-emerald-400">
-                                            {filteredData.reduce((acc, curr) => acc + Number(curr.Seat || 1), 0).toLocaleString()} ที่นั่ง
+                                            {analyticsKPIs.totalSeatsUsed.toLocaleString()} ที่นั่ง
                                         </div>
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">👥 พนักงานที่ใช้สิทธิ์</div>
-                                        <div className="text-2xl font-bold text-indigo-400">{new Set(filteredData.map(d => d.Barcode)).size} คน</div>
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">📈 อัตราการใช้สิทธิ์ (%)</div>
+                                        <div className="text-2xl font-bold text-indigo-400">{analyticsKPIs.utilizationRate}%</div>
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
@@ -977,7 +1449,7 @@
                                             <span>🏢 แผนกที่ใช้สิทธิ์สูงสุด (Top Departments)</span>
                                         </h4>
                                         <div className="space-y-2">
-                                            {chartDepartData.sort((a,b) => b.seats - a.seats).slice(0, 5).map((d, i) => (
+                                            {chartDepartData.slice(0, 5).map((d, i) => (
                                                 <div key={d.name} className="flex items-center justify-between p-2.5 bg-slate-900 rounded-lg text-xs">
                                                     <span className="font-semibold text-slate-200">{i+1}. {d.name}</span>
                                                     <span className="font-bold text-indigo-400">{d.seats} ที่นั่ง</span>
@@ -988,7 +1460,7 @@
 
                                     <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-xl space-y-3">
                                         <h4 className="text-sm font-bold text-white flex items-center gap-2">
-                                            <span>🎬 ภาพยนตร์ยอดนิยมประจำช่วงเวลานี้</span>
+                                            <span>🎬 ภาพยนตร์/สวัสดิการยอดนิยมประจำช่วงเวลานี้</span>
                                         </h4>
                                         <div className="space-y-2">
                                             {topMoviesData.map((m, i) => (
@@ -1004,7 +1476,7 @@
                         )}
                     </main>
 
-                    {/* Employee History Modal */}
+                    {/* Employee Claim History Modal */}
                     {selectedAuditRecord && (
                         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[85vh] flex flex-col">
