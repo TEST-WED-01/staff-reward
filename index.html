@@ -11,7 +11,7 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- SheetJS (XLSX Parser) -->
+    <!-- SheetJS (XLSX Parser & Writer) -->
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <!-- Recharts -->
     <script src="https://unpkg.com/prop-types@15.8.1/prop-types.min.js"></script>
@@ -43,7 +43,6 @@
         const { useState, useEffect, useMemo } = React;
         const { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, Legend } = window.Recharts || {};
 
-        // Master Level Rules Data
         const DEFAULT_LEVEL_RULES = [
             { levelCode: 'AF', levelName: 'Department/Director', ticketQty: 10, conditionMovie: 4, conditionSeat: 2 },
             { levelCode: 'AH', levelName: 'Department/Director', ticketQty: 5, conditionMovie: 4, conditionSeat: 2 },
@@ -63,10 +62,8 @@
             { levelCode: 'PF', levelName: 'Parttime', ticketQty: 100, conditionMovie: 0, conditionSeat: 100 }
         ];
 
-        // Clean single quote `'` from barcodes
         const cleanBarcode = (val) => val ? String(val).replace(/'/g, "").trim() : "";
 
-        // Parse custom Thai date strings or Excel serial numbers
         const parseThaiCustomDate = (val) => {
             if (val === null || val === undefined || val === '') return null;
             if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
@@ -98,7 +95,6 @@
             return isNaN(fallback.getTime()) ? null : fallback;
         };
 
-        // Format dates into Thai standard format
         const formatDateDisplay = (val) => {
             const dt = parseThaiCustomDate(val);
             if (!dt) return val || "-";
@@ -111,17 +107,20 @@
             return `${day}/${month}/${year} ${hours}:${mins}:${secs}`;
         };
 
+        const getYearMonthKey = (val) => {
+            const dt = parseThaiCustomDate(val);
+            if (!dt) return "ไม่ระบุเดือน";
+            const y = dt.getFullYear();
+            const m = String(dt.getMonth() + 1).padStart(2, '0');
+            return `${y}-${m}`;
+        };
+
         const INITIAL_MOCK_DATA = [
             { Datetime: "1/2/2026 10:00:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Zootopia 2 (T)", No: "C2, C1", Showtime: "1/2/2026 10:30:00", Seat: 2 },
             { Datetime: "2/2/2026 14:15:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Avatar 3", No: "D5, D6", Showtime: "2/2/2026 15:00:00", Seat: 2 },
-            { Datetime: "3/2/2026 18:20:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Wicked", No: "E1, E2", Showtime: "3/2/2026 19:00:00", Seat: 2 },
-            { Datetime: "5/2/2026 11:30:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Zootopia 2 (T)", No: "A1, A2", Showtime: "5/2/2026 12:00:00", Seat: 2 }
+            { Datetime: "3/3/2026 18:20:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Wicked", No: "E1, E2", Showtime: "3/3/2026 19:00:00", Seat: 2 },
+            { Datetime: "5/3/2026 11:30:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Zootopia 2 (T)", No: "A1, A2", Showtime: "5/3/2026 12:00:00", Seat: 2 }
         ];
-
-        const CHART_COLORS = ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#6366F1'];
-
-        // 🔗 ใส่ Cloudflare Worker Endpoint URL ของคุณตรงนี้ได้เลย
-        const DEFAULT_WORKER_URL = "https://staffreward.jaypichayut01.workers.dev";
 
         function App() {
             const [fileList, setFileList] = useState([
@@ -136,21 +135,13 @@
             ]);
 
             const [levelRules] = useState(DEFAULT_LEVEL_RULES);
-            
-            // Cloudflare Worker API Gateway State
-            const [workerUrl] = useState(DEFAULT_WORKER_URL);
-            const [isCfConnected, setIsCfConnected] = useState(false);
-            const [isSyncing, setIsSyncing] = useState(false);
-
-            // Toast message system
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
 
-            // Navigation & UI States
             const [activeTab, setActiveTab] = useState("dashboard");
             const [showFileManager, setShowFileManager] = useState(false);
-            const [selectedAuditBarcode, setSelectedAuditBarcode] = useState(null);
+            const [selectedAuditRecord, setSelectedAuditRecord] = useState(null);
+            const [selectedAuditMonth, setSelectedAuditMonth] = useState("ALL");
 
-            // Filter States
             const [searchTerm, setSearchTerm] = useState("");
             const [selectedDepart, setSelectedDepart] = useState("ALL");
             const [selectedBranches, setSelectedBranches] = useState([]); 
@@ -169,140 +160,6 @@
             const showNotification = (msg, type = 'info') => {
                 setToast({ show: true, message: msg, type });
                 setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 4000);
-            };
-
-            useEffect(() => {
-                if (workerUrl) {
-                    const cleanUrl = workerUrl.replace(/\/$/, '');
-                    fetch(`${cleanUrl}/api/health`)
-                        .then(res => res.json())
-                        .then(data => {
-                            if (data && data.status === 'online') {
-                                setIsCfConnected(true);
-                                localStorage.setItem('cf_worker_url', cleanUrl);
-                            } else {
-                                setIsCfConnected(false);
-                            }
-                        })
-                        .catch(() => setIsCfConnected(false));
-                } else {
-                    setIsCfConnected(false);
-                }
-            }, [workerUrl]);
-
-            const handleConnectWorker = (e) => {
-                e.preventDefault();
-                if (!workerUrl) {
-                    setCfMessage({ type: 'error', text: 'กรุณากรอก Cloudflare Worker URL' });
-                    return;
-                }
-                const cleanUrl = workerUrl.replace(/\/$/, '');
-                fetch(`${cleanUrl}/api/health`)
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data && data.status === 'online') {
-                            setIsCfConnected(true);
-                            setWorkerUrl(cleanUrl);
-                            localStorage.setItem('cf_worker_url', cleanUrl);
-                            setCfMessage({ type: 'success', text: 'เชื่อมต่อ Cloudflare API Gateway สำเร็จ!' });
-                            showNotification('เชื่อมต่อ Cloudflare API Gateway สำเร็จ!', 'success');
-                            setTimeout(() => { setShowCfModal(false); setCfMessage({ type: '', text: '' }); }, 1200);
-                        } else {
-                            throw new Error('Gateway Offline');
-                        }
-                    })
-                    .catch(() => {
-                        setIsCfConnected(false);
-                        setCfMessage({ type: 'error', text: 'ไม่สามารถเชื่อมต่อ Worker URL ได้ กรุณาตรวจสอบลิงก์อีกครั้ง' });
-                    });
-            };
-
-            const fetchFromWorker = async () => {
-                if (!workerUrl) return;
-                setIsSyncing(true);
-                try {
-                    const res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/welfare-logs`);
-                    const responseData = await res.json();
-
-                    if (!res.ok || !responseData.success) {
-                        throw new Error(responseData.error || 'Failed to fetch logs from Worker Gateway');
-                    }
-
-                    const data = responseData.data || [];
-                    if (data.length > 0) {
-                        const formatted = data.map(row => ({
-                            Datetime: row.claim_datetime || row.Datetime,
-                            Depart: row.depart || row.Depart || "ไม่ระบุ",
-                            Level: row.level || row.Level || "-",
-                            Barcode: cleanBarcode(row.barcode || row.Barcode),
-                            StaffName: row.staff_name || row.StaffName || "N/A",
-                            Branch: row.branch || row.Branch || "-",
-                            Moviename: row.moviename || row.Moviename || "N/A",
-                            No: row.seat_no || row.No || "-",
-                            Showtime: row.showtime || row.Showtime || "-",
-                            Seat: Number(row.seat_count || row.Seat || 1)
-                        }));
-
-                        const cfFileObj = {
-                            id: `cf-cloud-${Date.now()}`,
-                            fileName: `☁️ Cloudflare Data (${data.length} รายการ)`,
-                            uploadTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
-                            recordCount: formatted.length,
-                            enabled: true,
-                            data: formatted
-                        };
-
-                        setFileList(prev => [cfFileObj, ...prev.filter(f => !f.id.startsWith('cf-cloud-'))]);
-                        showNotification(`ดึงข้อมูลสำเร็จ ทั้งหมด ${data.length} รายการ`, 'success');
-                    } else {
-                        showNotification('ไม่พบข้อมูลในตาราง welfare_logs บนฐานข้อมูล', 'warning');
-                    }
-                } catch (err) {
-                    showNotification('เกิดข้อผิดพลาด: ' + err.message, 'error');
-                } finally {
-                    setIsSyncing(false);
-                }
-            };
-
-            const pushToWorker = async () => {
-                if (!workerUrl) return;
-                if (activeRawData.length === 0) {
-                    showNotification('ไม่มีข้อมูลในระบบสำหรับส่งขึ้น Cloud', 'warning');
-                    return;
-                }
-
-                setIsSyncing(true);
-                try {
-                    const payload = activeRawData.map(d => ({
-                        barcode: cleanBarcode(d.Barcode),
-                        staff_name: d.StaffName,
-                        depart: d.Depart,
-                        level: d.Level,
-                        branch: d.Branch,
-                        moviename: d.Moviename,
-                        seat_no: d.No,
-                        seat_count: d.Seat,
-                        claim_datetime: parseThaiCustomDate(d.Datetime) ? parseThaiCustomDate(d.Datetime).toISOString() : new Date().toISOString(),
-                        showtime: d.Showtime
-                    }));
-
-                    const res = await fetch(`${workerUrl.replace(/\/$/, '')}/api/welfare-logs`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
-
-                    const responseData = await res.json();
-                    if (!res.ok || !responseData.success) {
-                        throw new Error(responseData.error || 'Failed to push logs via Worker Gateway');
-                    }
-
-                    showNotification(`บันทึกข้อมูลสำเร็จจำนวน ${payload.length} รายการ`, 'success');
-                } catch (err) {
-                    showNotification('เกิดข้อผิดพลาดในการบันทึกข้อมูล: ' + err.message, 'error');
-                } finally {
-                    setIsSyncing(false);
-                }
             };
 
             const handleFileUpload = (e) => {
@@ -396,16 +253,6 @@
                 setCurrentPage(1);
             };
 
-            const handleMonthSelect = (e) => {
-                const val = e.target.value;
-                if (val) {
-                    const [y, m] = val.split('-');
-                    const lastDay = new Date(Number(y), Number(m), 0).getDate();
-                    setTempStartDate(`${y}-${m}-01`);
-                    setTempEndDate(`${y}-${m}-${String(lastDay).padStart(2, '0')}`);
-                }
-            };
-
             const activeRawData = useMemo(() => {
                 return fileList.filter(f => f.enabled).flatMap(f => f.data);
             }, [fileList]);
@@ -425,15 +272,8 @@
                 return Array.from(set).sort();
             }, [activeRawData]);
 
-            const levelsList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Level).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            // Filtered records
             const filteredData = useMemo(() => {
                 return activeRawData.filter(item => {
-                    // Search
                     if (searchTerm) {
                         const term = searchTerm.toLowerCase();
                         const matchName = String(item.StaffName || "").toLowerCase().includes(term);
@@ -441,15 +281,11 @@
                         const matchMovie = String(item.Moviename || "").toLowerCase().includes(term);
                         if (!matchName && !matchCode && !matchMovie) return false;
                     }
-                    // Depart
                     if (selectedDepart !== "ALL" && item.Depart !== selectedDepart) return false;
-                    // Branch
                     if (selectedBranches.length > 0 && !selectedBranches.includes(item.Branch)) return false;
-                    // Movie
                     if (selectedMovie !== "ALL" && item.Moviename !== selectedMovie) return false;
-                    // Level
                     if (selectedLevel !== "ALL" && item.Level !== selectedLevel) return false;
-                    // Date
+                    
                     const dt = parseThaiCustomDate(item.Datetime);
                     if (startDate && dt) {
                         const s = new Date(startDate);
@@ -465,30 +301,34 @@
                 });
             }, [activeRawData, searchTerm, selectedDepart, selectedBranches, selectedMovie, selectedLevel, startDate, endDate]);
 
-            // Audit Summaries grouped by Employee
             const auditSummary = useMemo(() => {
                 const map = {};
                 filteredData.forEach(row => {
                     const bc = cleanBarcode(row.Barcode);
                     if (!bc) return;
-                    if (!map[bc]) {
-                        map[bc] = {
+                    const monthKey = getYearMonthKey(row.Datetime);
+                    const compositeKey = `${bc}_${monthKey}`;
+
+                    if (!map[compositeKey]) {
+                        map[compositeKey] = {
+                            key: compositeKey,
                             barcode: bc,
                             staffName: row.StaffName || "N/A",
                             depart: row.Depart || "N/A",
                             level: row.Level || "-",
                             branch: row.Branch || "-",
+                            monthPeriod: monthKey,
                             totalSeatsUsed: 0,
                             claimCount: 0,
                             history: []
                         };
                     }
-                    map[bc].totalSeatsUsed += Number(row.Seat || 1);
-                    map[bc].claimCount += 1;
-                    map[bc].history.push(row);
+                    map[compositeKey].totalSeatsUsed += Number(row.Seat || 1);
+                    map[compositeKey].claimCount += 1;
+                    map[compositeKey].history.push(row);
                 });
 
-                return Object.values(map).map(emp => {
+                let results = Object.values(map).map(emp => {
                     const rule = levelRules.find(r => r.levelCode.toUpperCase() === String(emp.level).toUpperCase()) || { ticketQty: 0, levelName: "Unknown" };
                     const quota = rule.ticketQty;
                     const remaining = quota - emp.totalSeatsUsed;
@@ -500,9 +340,23 @@
                         exceededBy: emp.totalSeatsUsed > quota ? emp.totalSeatsUsed - quota : 0
                     };
                 });
-            }, [filteredData, levelRules]);
 
-            // Dashboard Charts Data
+                if (selectedAuditMonth !== "ALL") {
+                    results = results.filter(r => r.monthPeriod === selectedAuditMonth);
+                }
+
+                return results.sort((a, b) => b.monthPeriod.localeCompare(a.monthPeriod));
+            }, [filteredData, levelRules, selectedAuditMonth]);
+
+            const availableAuditMonths = useMemo(() => {
+                const set = new Set();
+                filteredData.forEach(row => {
+                    const mk = getYearMonthKey(row.Datetime);
+                    if (mk) set.add(mk);
+                });
+                return Array.from(set).sort().reverse();
+            }, [filteredData]);
+
             const chartDepartData = useMemo(() => {
                 const map = {};
                 filteredData.forEach(d => {
@@ -510,15 +364,6 @@
                     map[dep] = (map[dep] || 0) + Number(d.Seat || 1);
                 });
                 return Object.keys(map).map(k => ({ name: k, seats: map[k] }));
-            }, [filteredData]);
-
-            const chartLevelData = useMemo(() => {
-                const map = {};
-                filteredData.forEach(d => {
-                    const lvl = d.Level || "ไม่ระบุ";
-                    map[lvl] = (map[lvl] || 0) + Number(d.Seat || 1);
-                });
-                return Object.keys(map).map(k => ({ name: k, value: map[k] }));
             }, [filteredData]);
 
             const topMoviesData = useMemo(() => {
@@ -530,7 +375,50 @@
                 return Object.keys(map).map(k => ({ name: k, count: map[k] })).sort((a, b) => b.count - a.count).slice(0, 5);
             }, [filteredData]);
 
-            // Pagination
+            const exportToExcel = (dataToExport, fileName, sheetName = "Data") => {
+                try {
+                    const ws = XLSX.utils.json_to_sheet(dataToExport);
+                    const wb = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(wb, ws, sheetName);
+                    XLSX.writeFile(wb, `${fileName}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+                    showNotification(`ส่งออกไฟล์ ${fileName}.xlsx สำเร็จ!`, 'success');
+                } catch (err) {
+                    showNotification('เกิดข้อผิดพลาดในการส่งออกไฟล์ Excel', 'error');
+                }
+            };
+
+            const exportLogsToExcel = () => {
+                const exportData = filteredData.map((d, i) => ({
+                    No: i + 1,
+                    Datetime: formatDateDisplay(d.Datetime),
+                    Department: d.Depart,
+                    Level: d.Level,
+                    Barcode: d.Barcode,
+                    StaffName: d.StaffName,
+                    Branch: d.Branch,
+                    MovieName: d.Moviename,
+                    SeatNo: d.No,
+                    SeatCount: d.Seat
+                }));
+                exportToExcel(exportData, "Welfare_Claim_Logs", "Logs");
+            };
+
+            const exportAuditToExcel = () => {
+                const exportData = auditSummary.map((a, i) => ({
+                    No: i + 1,
+                    MonthPeriod: a.monthPeriod,
+                    Barcode: a.barcode,
+                    StaffName: a.staffName,
+                    Department: a.depart,
+                    Level: a.level,
+                    MonthlyQuota: a.quota,
+                    UsedSeats: a.totalSeatsUsed,
+                    RemainingQuota: a.remaining,
+                    Status: a.isExceeded ? `เกินโควตา ${a.exceededBy}` : 'ปกติ'
+                }));
+                exportToExcel(exportData, "Monthly_Welfare_Audit", "Audit");
+            };
+
             const totalPages = Math.ceil(filteredData.length / itemsPerPage) || 1;
             const paginatedData = useMemo(() => {
                 const start = (currentPage - 1) * itemsPerPage;
@@ -539,7 +427,6 @@
 
             return (
                 <div className="min-h-screen pb-12 flex flex-col">
-                    {/* Toast Notification */}
                     {toast.show && (
                         <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl border text-xs font-semibold flex items-center gap-2 transition-all duration-300 ${
                             toast.type === 'success' ? 'bg-emerald-950 border-emerald-500/50 text-emerald-200' :
@@ -568,36 +455,35 @@
                                 <div className="flex items-center bg-slate-900/80 p-1 rounded-xl border border-slate-700/80 text-xs font-semibold">
                                     <button
                                         onClick={() => setActiveTab("dashboard")}
-                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'dashboard' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         📊 ภาพรวม
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("audit")}
-                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'audit' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'audit' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
                                         🎯 ตรวจสิทธิ์คงเหลือ
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("logs")}
-                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
-                                        📋 รายการเบิกสิทธิ์ ({filteredData.length})
+                                        📋 รายการเบิก ({filteredData.length})
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("rules")}
-                                        className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'rules' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
-                                        ⚙️ เกณฑ์สิทธิ์ประจำตำแหน่ง
+                                        ⚙️ เกณฑ์สิทธิ์
+                                    </button>
+                                    <button
+                                        onClick={() => setActiveTab("executive")}
+                                        className={`px-3 py-1.5 rounded-lg transition ${activeTab === 'executive' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        📸 รายงานผู้บริหาร
                                     </button>
                                 </div>
-
-                                {isCfConnected && (
-                                    <div className="px-3 py-1.5 text-xs font-semibold rounded-xl bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 flex items-center gap-1.5">
-                                        <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                                        <span>Cloud Gateway Active</span>
-                                    </div>
-                                )}
                             </div>
                         </div>
                     </header>
@@ -620,25 +506,12 @@
                                         <span>📂 จัดการไฟล์ข้อมูล ({fileList.length})</span>
                                     </button>
 
-                                    {isCfConnected && (
-                                        <>
-                                            <button 
-                                                onClick={fetchFromWorker}
-                                                disabled={isSyncing}
-                                                className="flex items-center gap-1 px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition shadow"
-                                            >
-                                                <span>{isSyncing ? '⏳ กำลังดึง...' : '☁️ ดึงข้อมูลจาก Cloudflare'}</span>
-                                            </button>
-
-                                            <button 
-                                                onClick={pushToWorker}
-                                                disabled={isSyncing}
-                                                className="flex items-center gap-1 px-3 py-2 bg-blue-600 hover:bg-blue-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition shadow"
-                                            >
-                                                <span>☁️ ส่งออกไปยัง Cloud Gateway</span>
-                                            </button>
-                                        </>
-                                    )}
+                                    <button 
+                                        onClick={exportLogsToExcel}
+                                        className="px-3 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-lg transition shadow flex items-center gap-1.5"
+                                    >
+                                        <span>📥 Export ข้อมูลที่กรองเป็น Excel</span>
+                                    </button>
                                 </div>
 
                                 <button 
@@ -650,7 +523,7 @@
                             </div>
 
                             {/* Filters Bar */}
-                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
+                            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-6 gap-3">
                                 <div>
                                     <label className="block text-[11px] font-semibold text-slate-400 mb-1">🔍 ค้นหา พนักงาน/Barcode/หนัง</label>
                                     <input 
@@ -687,24 +560,32 @@
                                 </div>
 
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🎖️ ระดับตำแหน่ง (Level)</label>
-                                    <select
-                                        value={selectedLevel}
-                                        onChange={(e) => { setSelectedLevel(e.target.value); setCurrentPage(1); }}
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 จากวันที่ (Start Date)</label>
+                                    <input 
+                                        type="date"
+                                        value={tempStartDate}
+                                        onChange={(e) => setTempStartDate(e.target.value)}
                                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                    >
-                                        <option value="ALL">ทุกระดับตำแหน่ง (All Levels)</option>
-                                        {levelsList.map(lvl => <option key={lvl} value={lvl}>{lvl}</option>)}
-                                    </select>
+                                    />
                                 </div>
 
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 เลือกเดือนด่วน</label>
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">📅 ถึงวันที่ (End Date)</label>
                                     <input 
-                                        type="month"
-                                        onChange={handleMonthSelect}
+                                        type="date"
+                                        value={tempEndDate}
+                                        onChange={(e) => setTempEndDate(e.target.value)}
                                         className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                                     />
+                                </div>
+
+                                <div className="flex items-end">
+                                    <button
+                                        onClick={handleApplyDateFilter}
+                                        className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold rounded-lg transition shadow"
+                                    >
+                                        🔍 กรองวันที่
+                                    </button>
                                 </div>
                             </div>
 
@@ -734,7 +615,7 @@
                             )}
                         </div>
 
-                        {/* File Manager Drawer/Section */}
+                        {/* File Manager Drawer */}
                         {showFileManager && (
                             <div className="bg-slate-800 rounded-xl p-4 border border-indigo-500/40 mb-6 shadow-xl space-y-3">
                                 <div className="flex items-center justify-between border-b border-slate-700 pb-2">
@@ -772,10 +653,9 @@
                             </div>
                         )}
 
-                        {}
+                        {/* Tab 1: Dashboard */}
                         {activeTab === "dashboard" && (
                             <div className="space-y-6">
-                                {/* Top KPI Cards */}
                                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                                     <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">🎟️ จำนวนการเบิกสิทธิ์ทั้งหมด</div>
@@ -789,19 +669,17 @@
                                     </div>
                                     <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">👥 พนักงานที่ใช้สิทธิ์แล้ว</div>
-                                        <div className="text-2xl font-bold text-indigo-400">{auditSummary.length.toLocaleString()} <span className="text-xs font-normal text-slate-400">คน</span></div>
+                                        <div className="text-2xl font-bold text-indigo-400">{new Set(filteredData.map(d => d.Barcode)).size.toLocaleString()} <span className="text-xs font-normal text-slate-400">คน</span></div>
                                     </div>
                                     <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ พนักงานที่ใช้สิทธิ์เกินโควตา</div>
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
                                         <div className="text-2xl font-bold text-rose-400">
-                                            {auditSummary.filter(a => a.isExceeded).length.toLocaleString()} <span className="text-xs font-normal text-slate-400">คน</span>
+                                            {auditSummary.filter(a => a.isExceeded).length.toLocaleString()} <span className="text-xs font-normal text-slate-400">รายการเดือน</span>
                                         </div>
                                     </div>
                                 </div>
 
-                                {/* Charts Row */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                                    {/* Department Bar Chart */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md">
                                         <h3 className="text-sm font-bold text-white mb-4">📊 สถิติการใช้ที่นั่งแยกตามแผนก (Department)</h3>
                                         <div className="h-64">
@@ -816,7 +694,6 @@
                                         </div>
                                     </div>
 
-                                    {/* Top Movies List & Pie Chart */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md flex flex-col justify-between">
                                         <div>
                                             <h3 className="text-sm font-bold text-white mb-4">🎬 5 อันดับภาพยนตร์ที่มีการแลกรับสูงสุด</h3>
@@ -837,16 +714,29 @@
                             </div>
                         )}
 
-                        {}
+                        {/* Tab 2: Audit Monthly Entitlement */}
                         {activeTab === "audit" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
                                     <div>
-                                        <h3 className="text-base font-bold text-white">🎯 รายงานสรุปการตรวจสอบสิทธิ์คงเหลือรายบุคคล</h3>
-                                        <p className="text-xs text-slate-400">เปรียบเทียบจำนวนการเบิกสิทธิ์จริง กับโควตาสิทธิ์ประจำตำแหน่ง (Master Rules)</p>
+                                        <h3 className="text-base font-bold text-white">🎯 รายงานสรุปการตรวจสอบสิทธิ์คงเหลือรายบุคคล (แยกตามเดือน)</h3>
+                                        <p className="text-xs text-slate-400">เปรียบเทียบจำนวนการเบิกสิทธิ์จริงรายเดือน กับโควตาสิทธิ์ประจำตำแหน่ง (Master Rules แบบตัดรอบรายเดือนถูกต้อง)</p>
                                     </div>
-                                    <div className="text-xs font-semibold px-3 py-1.5 bg-indigo-500/10 text-indigo-300 border border-indigo-500/30 rounded-lg">
-                                        พนักงานที่ประมวลผล: {auditSummary.length} คน
+                                    <div className="flex items-center gap-2">
+                                        <select
+                                            value={selectedAuditMonth}
+                                            onChange={(e) => setSelectedAuditMonth(e.target.value)}
+                                            className="bg-slate-900 border border-slate-700 text-white text-xs rounded-lg p-2"
+                                        >
+                                            <option value="ALL">ทุกเดือน (All Months)</option>
+                                            {availableAuditMonths.map(m => <option key={m} value={m}>เดือน {m}</option>)}
+                                        </select>
+                                        <button
+                                            onClick={exportAuditToExcel}
+                                            className="px-3 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-lg transition shadow"
+                                        >
+                                            📥 Export สรุปสิทธิ์
+                                        </button>
                                     </div>
                                 </div>
 
@@ -854,12 +744,13 @@
                                     <table className="w-full text-left text-xs text-slate-300">
                                         <thead className="bg-slate-900 text-slate-400 uppercase font-semibold border-b border-slate-700">
                                             <tr>
+                                                <th className="p-3">รอบเดือน</th>
                                                 <th className="p-3">Barcode</th>
                                                 <th className="p-3">ชื่อ-นามสกุล พนักงาน</th>
                                                 <th className="p-3">แผนก</th>
                                                 <th className="p-3">ระดับ (Level)</th>
-                                                <th className="p-3 text-center">โควตา</th>
-                                                <th className="p-3 text-center">ใช้นำไปแล้ว</th>
+                                                <th className="p-3 text-center">โควตา/เดือน</th>
+                                                <th className="p-3 text-center">ใช้ไปในเดือนนี้</th>
                                                 <th className="p-3 text-center">สิทธิ์คงเหลือ</th>
                                                 <th className="p-3 text-center">สถานะ</th>
                                                 <th className="p-3 text-center">ประวัติ</th>
@@ -868,11 +759,12 @@
                                         <tbody className="divide-y divide-slate-700/60">
                                             {auditSummary.length === 0 ? (
                                                 <tr>
-                                                    <td colSpan="9" className="p-6 text-center text-slate-500">ไม่พบข้อมูลการใช้สิทธิ์ตรงตามตัวกรอง</td>
+                                                    <td colSpan="10" className="p-6 text-center text-slate-500">ไม่พบข้อมูลการใช้สิทธิ์ตามเงื่อนไข</td>
                                                 </tr>
                                             ) : (
                                                 auditSummary.map(item => (
-                                                    <tr key={item.barcode} className="hover:bg-slate-700/40 transition">
+                                                    <tr key={item.key} className="hover:bg-slate-700/40 transition">
+                                                        <td className="p-3 font-mono text-indigo-300 font-bold">{item.monthPeriod}</td>
                                                         <td className="p-3 font-mono text-slate-400">{item.barcode}</td>
                                                         <td className="p-3 font-semibold text-white">{item.staffName}</td>
                                                         <td className="p-3 text-slate-300">{item.depart}</td>
@@ -893,7 +785,7 @@
                                                         </td>
                                                         <td className="p-3 text-center">
                                                             <button 
-                                                                onClick={() => setSelectedAuditBarcode(item)}
+                                                                onClick={() => setSelectedAuditRecord(item)}
                                                                 className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded text-[11px] font-semibold transition"
                                                             >
                                                                 ดูประวัติ ({item.claimCount})
@@ -908,7 +800,7 @@
                             </div>
                         )}
 
-                        {}
+                        {/* Tab 3: Detailed Logs */}
                         {activeTab === "logs" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -970,7 +862,6 @@
                                     </table>
                                 </div>
 
-                                {/* Pagination Controls */}
                                 <div className="flex items-center justify-between border-t border-slate-700 pt-3 text-xs">
                                     <span className="text-slate-400">
                                         หน้า {currentPage} จาก {totalPages} ({filteredData.length} รายการ)
@@ -995,7 +886,7 @@
                             </div>
                         )}
 
-                        {}
+                        {/* Tab 4: Rules */}
                         {activeTab === "rules" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div>
@@ -1029,25 +920,107 @@
                                 </div>
                             </div>
                         )}
+
+                        {/* Tab 5: Executive View */}
+                        {activeTab === "executive" && (
+                            <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl p-6 shadow-2xl space-y-6">
+                                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                                    <div>
+                                        <div className="flex items-center gap-2">
+                                            <span className="p-2 bg-indigo-600 rounded-lg text-white text-lg">📸</span>
+                                            <h3 className="text-lg font-bold text-white">รายงานผู้บริหาร (Executive View)</h3>
+                                        </div>
+                                        <p className="text-xs text-slate-400 mt-1">
+                                            ช่วงเวลาข้อมูล: <span className="text-emerald-400 font-semibold">{startDate ? startDate : 'เริ่มต้น'} ถึง {endDate ? endDate : 'ปัจจุบัน'}</span> • กรองแล้ว {filteredData.length} รายการ
+                                        </p>
+                                    </div>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={() => exportToExcel(filteredData.map((d, i) => ({ No: i+1, Datetime: formatDateDisplay(d.Datetime), Depart: d.Depart, Level: d.Level, Barcode: d.Barcode, StaffName: d.StaffName, Branch: d.Branch, Movie: d.Moviename, Seats: d.Seat })), "Executive_Report", "Executive")}
+                                            className="px-3.5 py-2 bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold rounded-xl shadow transition"
+                                        >
+                                            📥 Export Excel สรุปผู้บริหาร
+                                        </button>
+                                        <button 
+                                            onClick={() => window.print()}
+                                            className="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded-xl shadow transition flex items-center gap-2"
+                                        >
+                                            <span>🖨️ พิมพ์หน้ารายงาน</span>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+                                    <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">🎟️ จำนวนครั้งการแลกสิทธิ์</div>
+                                        <div className="text-2xl font-bold text-white">{filteredData.length.toLocaleString()} ครั้ง</div>
+                                    </div>
+                                    <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">💺 จำนวนที่นั่งรวมที่ใช้</div>
+                                        <div className="text-2xl font-bold text-emerald-400">
+                                            {filteredData.reduce((acc, curr) => acc + Number(curr.Seat || 1), 0).toLocaleString()} ที่นั่ง
+                                        </div>
+                                    </div>
+                                    <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">👥 พนักงานที่ใช้สิทธิ์</div>
+                                        <div className="text-2xl font-bold text-indigo-400">{new Set(filteredData.map(d => d.Barcode)).size} คน</div>
+                                    </div>
+                                    <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
+                                        <div className="text-2xl font-bold text-rose-400">{auditSummary.filter(a => a.isExceeded).length} รายการ</div>
+                                    </div>
+                                </div>
+
+                                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                                    <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-xl space-y-3">
+                                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                            <span>🏢 แผนกที่ใช้สิทธิ์สูงสุด (Top Departments)</span>
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {chartDepartData.sort((a,b) => b.seats - a.seats).slice(0, 5).map((d, i) => (
+                                                <div key={d.name} className="flex items-center justify-between p-2.5 bg-slate-900 rounded-lg text-xs">
+                                                    <span className="font-semibold text-slate-200">{i+1}. {d.name}</span>
+                                                    <span className="font-bold text-indigo-400">{d.seats} ที่นั่ง</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+
+                                    <div className="bg-slate-800/80 border border-slate-700/80 p-5 rounded-xl space-y-3">
+                                        <h4 className="text-sm font-bold text-white flex items-center gap-2">
+                                            <span>🎬 ภาพยนตร์ยอดนิยมประจำช่วงเวลานี้</span>
+                                        </h4>
+                                        <div className="space-y-2">
+                                            {topMoviesData.map((m, i) => (
+                                                <div key={m.name} className="flex items-center justify-between p-2.5 bg-slate-900 rounded-lg text-xs">
+                                                    <span className="font-semibold text-slate-200">{i+1}. {m.name}</span>
+                                                    <span className="font-bold text-emerald-400">{m.count} ที่นั่ง</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
                     </main>
 
                     {/* Employee History Modal */}
-                    {selectedAuditBarcode && (
+                    {selectedAuditRecord && (
                         <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
                             <div className="bg-slate-900 border border-slate-700 rounded-2xl max-w-2xl w-full p-6 shadow-2xl relative space-y-4 max-h-[85vh] flex flex-col">
                                 <button 
-                                    onClick={() => setSelectedAuditBarcode(null)}
+                                    onClick={() => setSelectedAuditRecord(null)}
                                     className="absolute top-4 right-4 text-slate-400 hover:text-white p-1"
                                 >
                                     ✕
                                 </button>
                                 <div className="border-b border-slate-800 pb-3">
-                                    <h3 className="text-base font-bold text-white">📜 ประวัติการแลกสิทธิ์: {selectedAuditBarcode.staffName}</h3>
-                                    <p className="text-xs text-slate-400">Barcode: {selectedAuditBarcode.barcode} • แผนก: {selectedAuditBarcode.depart} • Level: {selectedAuditBarcode.level}</p>
+                                    <h3 className="text-base font-bold text-white">📜 ประวัติการแลกสิทธิ์: {selectedAuditRecord.staffName} (รอบเดือน {selectedAuditRecord.monthPeriod})</h3>
+                                    <p className="text-xs text-slate-400">Barcode: {selectedAuditRecord.barcode} • แผนก: {selectedAuditRecord.depart} • Level: {selectedAuditRecord.level}</p>
                                 </div>
 
                                 <div className="overflow-y-auto custom-scrollbar flex-1 space-y-2">
-                                    {selectedAuditBarcode.history.map((h, i) => (
+                                    {selectedAuditRecord.history.map((h, i) => (
                                         <div key={i} className="p-3 bg-slate-800/80 rounded-xl border border-slate-700/80 flex items-center justify-between text-xs">
                                             <div>
                                                 <p className="font-semibold text-emerald-300">{h.Moviename}</p>
