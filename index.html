@@ -245,13 +245,13 @@
             const [itemsPerPage, setItemsPerPage] = useState(20);
             const [isUploading, setIsUploading] = useState(false);
             const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+            const [syncProgress, setSyncProgress] = useState(null);
 
             const showNotification = (msg, type = 'info') => {
                 setToast({ show: true, message: msg, type });
                 setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 4000);
             };
 
-            // Login Handler with Cloudflare Verification
             const handleLogin = async (e) => {
                 e.preventDefault();
                 if (!passcode.trim()) {
@@ -315,7 +315,8 @@
                         }
                     }
 
-                    const logsRes = await fetch(`${WORKER_API_URL}/api/welfare-logs`);
+                    // ดึงข้อมูลประวัติการเบิกสิทธิ์สวัสดิการโดยไม่จำกัดแค่ 100 รายการ
+                    const logsRes = await fetch(`${WORKER_API_URL}/api/welfare-logs?select=*&order=claim_datetime.desc&limit=100000`);
                     if (logsRes.ok) {
                         const logsJson = await logsRes.json();
                         if (logsJson.success && Array.isArray(logsJson.data) && logsJson.data.length > 0) {
@@ -346,7 +347,7 @@
                                 return [cloudFileObj, ...filtered];
                             });
 
-                            showNotification(`ดึงข้อมูลจาก Cloud สำเร็จ (${mappedLogs.length} รายการ)`, 'success');
+                            showNotification(`ดึงข้อมูลจาก Cloud สำเร็จ (${mappedLogs.length.toLocaleString()} รายการ)`, 'success');
                         }
                     }
                     setCloudStatus('online');
@@ -369,35 +370,48 @@
 
                 try {
                     setIsSyncingCloud(true);
-                    const payload = activeRawData.slice(0, 100).map(d => ({
-                        barcode: cleanBarcode(d.Barcode),
-                        staff_name: d.StaffName,
-                        depart: d.Depart,
-                        level: d.Level,
-                        branch: d.Branch,
-                        moviename: d.Moviename,
-                        seat_no: d.No,
-                        seat_count: Number(d.Seat || 1),
-                        claim_datetime: parseThaiCustomDate(d.Datetime) ? parseThaiCustomDate(d.Datetime).toISOString() : new Date().toISOString()
-                    }));
+                    const totalRecords = activeRawData.length;
+                    const CHUNK_SIZE = 1000; // แบ่งส่งทีละ 1,000 รายการ เพื่อไม่ให้เกิน Request Body Limit
+                    let uploadedCount = 0;
 
-                    const res = await fetch(`${WORKER_API_URL}/api/welfare-logs`, {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(payload)
-                    });
+                    for (let i = 0; i < totalRecords; i += CHUNK_SIZE) {
+                        const chunkData = activeRawData.slice(i, i + CHUNK_SIZE);
+                        const payload = chunkData.map(d => ({
+                            barcode: cleanBarcode(d.Barcode),
+                            staff_name: d.StaffName,
+                            depart: d.Depart,
+                            level: d.Level,
+                            branch: d.Branch,
+                            moviename: d.Moviename,
+                            seat_no: d.No,
+                            seat_count: Number(d.Seat || 1),
+                            claim_datetime: parseThaiCustomDate(d.Datetime) ? parseThaiCustomDate(d.Datetime).toISOString() : new Date().toISOString()
+                        }));
 
-                    const json = await res.json();
-                    if (res.ok && json.success) {
-                        showNotification('บันทึกข้อมูลลง Supabase สำเร็จ!', 'success');
-                        fetchCloudData();
-                    } else {
-                        showNotification(`บันทึกไม่สำเร็จ: ${json.error?.message || json.error || 'เกิดข้อผิดพลาด'}`, 'error');
+                        const percent = Math.min(100, Math.round(((i + chunkData.length) / totalRecords) * 100));
+                        setSyncProgress(`กำลังอัปโหลด ${uploadedCount + chunkData.length} / ${totalRecords.toLocaleString()} รายการ (${percent}%)`);
+
+                        const res = await fetch(`${WORKER_API_URL}/api/welfare-logs`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(payload)
+                        });
+
+                        const json = await res.json();
+                        if (!res.ok || !json.success) {
+                            throw new Error(json.error?.message || json.error || `เกิดข้อผิดพลาดที่ชุดที่ ${Math.floor(i/CHUNK_SIZE) + 1}`);
+                        }
+
+                        uploadedCount += chunkData.length;
                     }
+
+                    showNotification(`บันทึกข้อมูลลง Supabase สำเร็จทั้งหมด ${uploadedCount.toLocaleString()} รายการ!`, 'success');
+                    fetchCloudData();
                 } catch (err) {
-                    showNotification('ไม่สามารถเชื่อมต่อกับ Cloudflare Worker ได้', 'error');
+                    showNotification(`บันทึกไม่สำเร็จ: ${err.message}`, 'error');
                 } finally {
                     setIsSyncingCloud(false);
+                    setSyncProgress(null);
                 }
             };
 
@@ -439,7 +453,7 @@
 
                         setFileList(prev => [...prev, newFileObj]);
                         setCurrentPage(1);
-                        showNotification(`นำเข้าไฟล์ ${file.name} จำนวน ${formatted.length} รายการสำเร็จ!`, 'success');
+                        showNotification(`นำเข้าไฟล์ ${file.name} จำนวน ${formatted.length.toLocaleString()} รายการสำเร็จ!`, 'success');
                     } catch (err) {
                         showNotification('ไม่สามารถอ่านไฟล์ Excel ได้ กรุณาตรวจสอบรูปแบบไฟล์', 'error');
                     } finally {
@@ -943,7 +957,7 @@
                                         onClick={() => setActiveTab("logs")}
                                         className={`px-3.5 py-1.5 rounded-lg transition ${activeTab === 'logs' ? 'bg-indigo-600 text-white shadow' : 'text-slate-400 hover:text-white'}`}
                                     >
-                                        📋 รายการเบิก ({filteredData.length})
+                                        📋 รายการเบิก ({filteredData.length.toLocaleString()})
                                     </button>
                                     <button
                                         onClick={() => setActiveTab("rules")}
@@ -970,6 +984,7 @@
                         </div>
                     </header>
 
+                    {}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex-1 w-full">
                         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6 space-y-4 shadow-lg">
                             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-700/60 pb-3">
@@ -985,7 +1000,7 @@
                                         disabled={isSyncingCloud || activeRawData.length === 0}
                                         className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition shadow flex items-center gap-1.5"
                                     >
-                                        <span>☁️ {isSyncingCloud ? 'กำลังซิงค์...' : 'บันทึกลง Cloud (Supabase)'}</span>
+                                        <span>☁️ {isSyncingCloud ? syncProgress || 'กำลังซิงค์...' : 'บันทึกลง Cloud (Supabase)'}</span>
                                     </button>
 
                                     <button 
@@ -1172,7 +1187,7 @@
                                             <div key={file.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${file.enabled ? 'bg-slate-900 border-indigo-500/50' : 'bg-slate-900/40 border-slate-800 opacity-60'}`}>
                                                 <div className="overflow-hidden">
                                                     <p className="text-xs font-semibold text-white truncate">{file.fileName}</p>
-                                                    <p className="text-[11px] text-slate-400">{file.recordCount} รายการ • อัปโหลด {file.uploadTime}</p>
+                                                    <p className="text-[11px] text-slate-400">{file.recordCount.toLocaleString()} รายการ • อัปโหลด {file.uploadTime}</p>
                                                 </div>
                                                 <div className="flex items-center gap-2 shrink-0">
                                                     <input 
@@ -1196,6 +1211,7 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === "dashboard" && (
                             <div className="space-y-6">
                                 {/* Enhanced Key Analytics Cards */}
@@ -1365,7 +1381,7 @@
                                                             <span className="w-6 h-6 rounded-full bg-indigo-600/30 text-indigo-400 flex items-center justify-center text-xs font-bold">{idx + 1}</span>
                                                             <span className="text-xs font-semibold text-slate-200">{m.name}</span>
                                                         </div>
-                                                        <span className="text-xs font-bold text-emerald-400">{m.count} ที่นั่ง</span>
+                                                        <span className="text-xs font-bold text-emerald-400">{m.count.toLocaleString()} ที่นั่ง</span>
                                                     </div>
                                                 ))}
                                             </div>
@@ -1375,6 +1391,7 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === "audit" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -1460,6 +1477,7 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === "logs" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -1523,7 +1541,7 @@
 
                                 <div className="flex items-center justify-between border-t border-slate-700 pt-3 text-xs">
                                     <span className="text-slate-400">
-                                        หน้า {currentPage} จาก {totalPages} ({filteredData.length} รายการ)
+                                        หน้า {currentPage} จาก {totalPages} ({filteredData.length.toLocaleString()} รายการ)
                                     </span>
                                     <div className="flex gap-1">
                                         <button 
@@ -1545,6 +1563,7 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === "rules" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div>
@@ -1579,6 +1598,7 @@
                             </div>
                         )}
 
+                        {}
                         {activeTab === "executive" && (
                             <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl p-6 shadow-2xl space-y-6">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -1588,7 +1608,7 @@
                                             <h3 className="text-lg font-bold text-white">รายงานผู้บริหาร (Executive Report View)</h3>
                                         </div>
                                         <p className="text-xs text-slate-400 mt-1">
-                                            ช่วงเวลาข้อมูล: <span className="text-emerald-400 font-semibold">{startDate ? startDate : 'เริ่มต้น'} ถึง {endDate ? endDate : 'ปัจจุบัน'}</span> • กรองแล้ว {filteredData.length} รายการ
+                                            ช่วงเวลาข้อมูล: <span className="text-emerald-400 font-semibold">{startDate ? startDate : 'เริ่มต้น'} ถึง {endDate ? endDate : 'ปัจจุบัน'}</span> • กรองแล้ว {filteredData.length.toLocaleString()} รายการ
                                         </p>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -1625,7 +1645,7 @@
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
-                                        <div className="text-2xl font-bold text-rose-400">{auditSummary.filter(a => a.isExceeded).length} รายการ</div>
+                                        <div className="text-2xl font-bold text-rose-400">{auditSummary.filter(a => a.isExceeded).length.toLocaleString()} รายการ</div>
                                     </div>
                                 </div>
 
@@ -1638,7 +1658,7 @@
                                             {chartDepartData.slice(0, 5).map((d, i) => (
                                                 <div key={d.name} className="flex items-center justify-between p-2.5 bg-slate-900 rounded-lg text-xs">
                                                     <span className="font-semibold text-slate-200">{i+1}. {d.name}</span>
-                                                    <span className="font-bold text-indigo-400">{d.seats} ที่นั่ง</span>
+                                                    <span className="font-bold text-indigo-400">{d.seats.toLocaleString()} ที่นั่ง</span>
                                                 </div>
                                             ))}
                                         </div>
@@ -1652,7 +1672,7 @@
                                             {topMoviesData.map((m, i) => (
                                                 <div key={m.name} className="flex items-center justify-between p-2.5 bg-slate-900 rounded-lg text-xs">
                                                     <span className="font-semibold text-slate-200">{i+1}. {m.name}</span>
-                                                    <span className="font-bold text-emerald-400">{m.count} ที่นั่ง</span>
+                                                    <span className="font-bold text-emerald-400">{m.count.toLocaleString()} ที่นั่ง</span>
                                                 </div>
                                             ))}
                                         </div>
