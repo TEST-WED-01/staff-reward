@@ -46,6 +46,8 @@
             PieChart, Pie, Cell, Legend, LineChart, Line, CartesianGrid, AreaChart, Area 
         } = window.Recharts || {};
 
+        const WORKER_API_URL = "https://staffreward.jaypichayut01.workers.dev";
+
         const DEFAULT_LEVEL_RULES = [
             { levelCode: 'AF', levelName: 'Department/Director', ticketQty: 10, conditionMovie: 4, conditionSeat: 2 },
             { levelCode: 'AH', levelName: 'Department/Director', ticketQty: 5, conditionMovie: 4, conditionSeat: 2 },
@@ -118,153 +120,87 @@
             return `${y}-${m}`;
         };
 
-        const INITIAL_MOCK_DATA = [
-            { Datetime: "1/2/2026 10:00:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Zootopia 2 (T)", No: "C2, C1", Showtime: "1/2/2026 10:30:00", Seat: 2 },
-            { Datetime: "2/2/2026 14:15:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Avatar 3", No: "D5, D6", Showtime: "2/2/2026 15:00:00", Seat: 2 },
-            { Datetime: "3/2/2026 18:20:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Wicked", No: "E1, E2", Showtime: "3/2/2026 19:00:00", Seat: 2 },
-            { Datetime: "5/2/2026 11:30:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Zootopia 2 (T)", No: "A1, A2", Showtime: "5/2/2026 12:00:00", Seat: 2 },
-            { Datetime: "10/2/2026 16:45:00", Depart: "Finance", Level: "CF", Barcode: "400001234", StaffName: "Anan Sukjai", Branch: "BKK", Moviename: "Gladiator II", No: "F3, F4", Showtime: "10/2/2026 17:30:00", Seat: 2 },
-            { Datetime: "12/2/2026 13:10:00", Depart: "IT", Level: "DF", Barcode: "500005678", StaffName: "Wichai Tech", Branch: "NKT", Moviename: "Avatar 3", No: "G1", Showtime: "12/2/2026 14:00:00", Seat: 1 },
-            { Datetime: "1/3/2026 10:00:00", Depart: "Operation", Level: "FF", Barcode: "100000506", StaffName: "Kanyapuk Wangklon", Branch: "NKT", Moviename: "Moana 2", No: "B1, B2", Showtime: "1/3/2026 11:00:00", Seat: 2 },
-            { Datetime: "3/3/2026 15:30:00", Depart: "HR", Level: "DF", Barcode: "200001102", StaffName: "Somchai Jaidee", Branch: "BKK", Moviename: "Avatar 3", No: "H7, H8", Showtime: "3/3/2026 16:30:00", Seat: 2 },
-            { Datetime: "15/3/2026 19:00:00", Depart: "Marketing", Level: "BF", Barcode: "300009941", StaffName: "Somsri Rakthai", Branch: "RAM", Moviename: "Gladiator II", No: "C3, C4", Showtime: "15/3/2026 20:00:00", Seat: 2 },
-            { Datetime: "10/11/2025 14:00:00", Depart: "IT", Level: "CF", Barcode: "600009988", StaffName: "Nattapong Dev", Branch: "BKK", Moviename: "Dune: Part Two", No: "A5, A6", Showtime: "10/11/2025 15:00:00", Seat: 2 }
-        ];
-
-        function MultiSelectDropdown({ label, options, selectedValues, onChange, placeholder }) {
+        function MultiSelectDropdown({ title, options, selected, onChange, placeholder }) {
             const [isOpen, setIsOpen] = useState(false);
             const [search, setSearch] = useState("");
             const dropdownRef = useRef(null);
 
             useEffect(() => {
-                function handleClickOutside(event) {
-                    if (dropdownRef.current && !dropdownRef.current.contains(event.target)) {
+                const handleClickOutside = (e) => {
+                    if (dropdownRef.current && !dropdownRef.current.contains(e.target)) {
                         setIsOpen(false);
                     }
-                }
-                document.addEventListener("mousedown", handleClickOutside);
-                return () => document.removeEventListener("mousedown", handleClickOutside);
+                };
+                document.addEventListener('mousedown', handleClickOutside);
+                return () => document.removeEventListener('mousedown', handleClickOutside);
             }, []);
 
             const filteredOptions = useMemo(() => {
-                if (!search.trim()) return options;
                 return options.filter(opt => String(opt).toLowerCase().includes(search.toLowerCase()));
             }, [options, search]);
 
-            const toggleOption = (val) => {
-                let currentSelected = selectedValues.length === 0 ? [...options] : [...selectedValues];
-                let updated;
-                if (currentSelected.includes(val)) {
-                    updated = currentSelected.filter(item => item !== val);
+            const toggleOption = (opt) => {
+                if (selected.includes(opt)) {
+                    onChange(selected.filter(item => item !== opt));
                 } else {
-                    updated = [...currentSelected, val];
+                    onChange([...selected, opt]);
                 }
-                if (updated.length === options.length) {
-                    updated = [];
-                }
-                onChange(updated);
             };
 
-            const handleSelectAll = () => {
-                onChange([]);
-            };
-
-            const getDisplayText = () => {
-                if (selectedValues.length === 0) {
-                    return `${placeholder} (ทั้งหมด ${options.length})`;
-                }
-                if (selectedValues.length === options.length) {
-                    return `ทั้งหมด (${options.length})`;
-                }
-                if (selectedValues.length === 1) {
-                    return selectedValues[0];
-                }
-                return `เลือกแล้ว ${selectedValues.length} รายการ`;
-            };
+            const handleSelectAll = () => onChange([...options]);
+            const handleClearAll = () => onChange([]);
 
             return (
                 <div className="relative" ref={dropdownRef}>
-                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">{label}</label>
+                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">{title}</label>
                     <button
                         type="button"
                         onClick={() => setIsOpen(!isOpen)}
-                        className={`w-full bg-slate-900 border rounded-lg p-2 text-xs text-left flex items-center justify-between transition focus:outline-none ${
-                            selectedValues.length > 0 
-                                ? 'border-indigo-500 text-indigo-300 font-semibold bg-indigo-950/40' 
-                                : 'border-slate-700 text-slate-200 hover:border-slate-600'
-                        }`}
+                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-left text-white flex items-center justify-between focus:outline-none focus:border-indigo-500"
                     >
-                        <span className="truncate pr-2">{getDisplayText()}</span>
-                        <span className="text-[10px] text-slate-400 shrink-0">{isOpen ? '▲' : '▼'}</span>
+                        <span className="truncate">
+                            {selected.length === 0 ? placeholder : `เลือกแล้ว ${selected.length} รายการ`}
+                        </span>
+                        <span className="text-slate-400 text-[10px] ml-1">{isOpen ? "▲" : "▼"}</span>
                     </button>
 
                     {isOpen && (
-                        <div className="absolute z-50 mt-1 w-64 bg-slate-800 border border-slate-700 rounded-xl shadow-2xl p-2.5 text-xs text-slate-200 left-0 max-h-80 flex flex-col">
-                            <div className="mb-2">
-                                <input
-                                    type="text"
-                                    placeholder="🔍 ค้นหาในรายการ..."
-                                    value={search}
-                                    onChange={(e) => setSearch(e.target.value)}
-                                    className="w-full bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-white focus:outline-none focus:border-indigo-500"
-                                />
+                        <div className="absolute z-50 mt-1 w-full min-w-[220px] bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-2 space-y-2 text-xs">
+                            <input
+                                type="text"
+                                placeholder="ค้นหา..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className="w-full bg-slate-900 border border-slate-700 rounded p-1.5 text-xs text-white focus:outline-none"
+                            />
+                            <div className="flex items-center justify-between text-[11px] text-indigo-400 pb-1 border-b border-slate-700 font-medium">
+                                <button type="button" onClick={handleSelectAll} className="hover:underline">เลือกทั้งหมด</button>
+                                <button type="button" onClick={handleClearAll} className="hover:underline text-rose-400">ล้างการเลือก</button>
                             </div>
-
-                            <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-700 text-[11px]">
-                                <button
-                                    type="button"
-                                    onClick={handleSelectAll}
-                                    className={`font-semibold hover:underline ${selectedValues.length === 0 ? 'text-indigo-400 font-bold' : 'text-slate-400'}`}
-                                >
-                                    ✓ เลือกทั้งหมด
-                                </button>
-                                {selectedValues.length > 0 && (
-                                    <button
-                                        type="button"
-                                        onClick={() => onChange([])}
-                                        className="text-rose-400 hover:underline font-semibold"
-                                    >
-                                        ✕ ล้างการเลือก ({selectedValues.length})
-                                    </button>
-                                )}
-                            </div>
-
-                            <div className="overflow-y-auto custom-scrollbar flex-1 space-y-1 pr-1 max-h-48">
+                            <div className="max-h-44 overflow-y-auto space-y-1 custom-scrollbar">
                                 {filteredOptions.length === 0 ? (
-                                    <p className="text-slate-500 text-center py-2 text-[11px]">ไม่พบข้อมูล</p>
+                                    <p className="text-[11px] text-slate-500 p-1 text-center">ไม่พบรายการ</p>
                                 ) : (
-                                    filteredOptions.map((opt) => {
-                                        const isChecked = selectedValues.length === 0 || selectedValues.includes(opt);
-                                        return (
-                                            <label
-                                                key={opt}
-                                                className="flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-slate-700/60 cursor-pointer text-xs select-none transition"
-                                            >
-                                                <input
-                                                    type="checkbox"
-                                                    checked={isChecked}
-                                                    onChange={() => toggleOption(opt)}
-                                                    className="w-3.5 h-3.5 accent-indigo-600 rounded cursor-pointer shrink-0"
-                                                />
-                                                <span className={`truncate ${isChecked ? 'text-white font-medium' : 'text-slate-400'}`}>
-                                                    {opt}
-                                                </span>
-                                            </label>
-                                        );
-                                    })
+                                    filteredOptions.map(opt => (
+                                        <label key={opt} className="flex items-center gap-2 p-1.5 hover:bg-slate-700/60 rounded cursor-pointer select-none text-slate-200 text-xs">
+                                            <input
+                                                type="checkbox"
+                                                checked={selected.includes(opt)}
+                                                onChange={() => toggleOption(opt)}
+                                                className="accent-indigo-600 rounded w-3.5 h-3.5"
+                                            />
+                                            <span className="truncate">{opt}</span>
+                                        </label>
+                                    ))
                                 )}
                             </div>
-
-                            <div className="pt-2 mt-2 border-t border-slate-700/80 flex items-center justify-between text-[10px] text-slate-400">
-                                <span>{selectedValues.length === 0 ? `เลือกทั้งหมด (${options.length})` : `เลือก ${selectedValues.length} จาก ${options.length}`}</span>
-                                <button
-                                    type="button"
-                                    onClick={() => setIsOpen(false)}
-                                    className="px-2.5 py-1 bg-indigo-600 hover:bg-indigo-500 text-white rounded font-medium transition"
-                                >
-                                    ตกลง
-                                </button>
-                            </div>
+                            <button
+                                type="button"
+                                onClick={() => setIsOpen(false)}
+                                className="w-full py-1.5 bg-indigo-600 hover:bg-indigo-500 text-white font-semibold rounded text-center text-[11px] transition shadow"
+                            >
+                                ตกลง
+                            </button>
                         </div>
                     )}
                 </div>
@@ -272,34 +208,28 @@
         }
 
         function App() {
-            const [fileList, setFileList] = useState([
-                { 
-                    id: 'file-default-1', 
-                    fileName: 'ข้อมูลตัวอย่าง (Sample Dataset)', 
-                    uploadTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }), 
-                    recordCount: INITIAL_MOCK_DATA.length, 
-                    enabled: true, 
-                    data: INITIAL_MOCK_DATA 
-                }
-            ]);
+            // Authentication state
+            const [isAuthenticated, setIsAuthenticated] = useState(() => {
+                return sessionStorage.getItem('admin_auth_status') === 'true';
+            });
+            const [passcode, setPasscode] = useState("");
+            const [isLoggingIn, setIsLoggingIn] = useState(false);
 
-            const [levelRules] = useState(DEFAULT_LEVEL_RULES);
+            const [fileList, setFileList] = useState([]);
+            const [levelRules, setLevelRules] = useState(DEFAULT_LEVEL_RULES);
             const [toast, setToast] = useState({ show: false, message: '', type: 'info' });
+            const [cloudStatus, setCloudStatus] = useState('connecting');
 
             const [activeTab, setActiveTab] = useState("dashboard");
             const [showFileManager, setShowFileManager] = useState(false);
             const [selectedAuditRecord, setSelectedAuditRecord] = useState(null);
             const [selectedAuditMonth, setSelectedAuditMonth] = useState("ALL");
 
-            // Search Term
+            // Filters
             const [searchTerm, setSearchTerm] = useState("");
-            
-            // Multi-Select Filters
-            const [selectedDeparts, setSelectedDeparts] = useState([]); 
-            const [selectedLevels, setSelectedLevels] = useState([]);   
+            const [selectedDeparts, setSelectedDeparts] = useState([]);
+            const [selectedLevels, setSelectedLevels] = useState([]);
             const [selectedBranches, setSelectedBranches] = useState([]); 
-
-            // Single Movie Selection
             const [selectedMovie, setSelectedMovie] = useState("ALL");
 
             // Date Filters
@@ -308,16 +238,167 @@
             const [tempStartDate, setTempStartDate] = useState("");
             const [tempEndDate, setTempEndDate] = useState("");
 
-            // Analytics Trend Toggle (daily / monthly / yearly)
+            // Analytics Trend Toggle
             const [trendGroup, setTrendGroup] = useState("monthly");
 
             const [currentPage, setCurrentPage] = useState(1);
             const [itemsPerPage, setItemsPerPage] = useState(20);
             const [isUploading, setIsUploading] = useState(false);
+            const [isSyncingCloud, setIsSyncingCloud] = useState(false);
 
             const showNotification = (msg, type = 'info') => {
                 setToast({ show: true, message: msg, type });
                 setTimeout(() => setToast({ show: false, message: '', type: 'info' }), 4000);
+            };
+
+            // Login Handler with Cloudflare Verification
+            const handleLogin = async (e) => {
+                e.preventDefault();
+                if (!passcode.trim()) {
+                    showNotification("กรุณาระบุรหัสผ่านเข้าใช้งาน", "warning");
+                    return;
+                }
+
+                setIsLoggingIn(true);
+                try {
+                    const res = await fetch(`${WORKER_API_URL}/api/verify-passcode`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ passcode: passcode.trim() })
+                    });
+
+                    const json = await res.json();
+                    if (res.ok && json.success) {
+                        sessionStorage.setItem('admin_auth_status', 'true');
+                        setIsAuthenticated(true);
+                        showNotification("เข้าสู่ระบบสำเร็จ ยินดีต้อนรับ!", "success");
+                        fetchCloudData();
+                    } else {
+                        showNotification(json.error?.message || json.error || "รหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง", "error");
+                    }
+                } catch (err) {
+                    showNotification("ไม่สามารถเชื่อมต่อระบบยืนยันรหัสผ่านบน Cloudflare ได้", "error");
+                } finally {
+                    setIsLoggingIn(false);
+                }
+            };
+
+            const handleLogout = () => {
+                sessionStorage.removeItem('admin_auth_status');
+                setIsAuthenticated(false);
+                setPasscode("");
+                showNotification("ออกจากระบบเรียบร้อยแล้ว", "info");
+            };
+
+            const fetchCloudData = async () => {
+                try {
+                    setCloudStatus('connecting');
+                    const healthRes = await fetch(`${WORKER_API_URL}/api/health`).catch(() => null);
+                    
+                    if (!healthRes || !healthRes.ok) {
+                        setCloudStatus('offline');
+                        return;
+                    }
+
+                    const rulesRes = await fetch(`${WORKER_API_URL}/api/level-rules`);
+                    if (rulesRes.ok) {
+                        const rulesJson = await rulesRes.json();
+                        if (rulesJson.success && Array.isArray(rulesJson.data) && rulesJson.data.length > 0) {
+                            const mappedRules = rulesJson.data.map(r => ({
+                                levelCode: r.level_code,
+                                levelName: r.level_name,
+                                ticketQty: r.ticket_qty,
+                                conditionMovie: r.condition_movie,
+                                conditionSeat: r.condition_seat
+                            }));
+                            setLevelRules(mappedRules);
+                        }
+                    }
+
+                    const logsRes = await fetch(`${WORKER_API_URL}/api/welfare-logs`);
+                    if (logsRes.ok) {
+                        const logsJson = await logsRes.json();
+                        if (logsJson.success && Array.isArray(logsJson.data) && logsJson.data.length > 0) {
+                            const mappedLogs = logsJson.data.map(r => ({
+                                Datetime: r.claim_datetime,
+                                Depart: r.depart || "ไม่ระบุ",
+                                Level: r.level || "-",
+                                Barcode: cleanBarcode(r.barcode),
+                                StaffName: r.staff_name || "N/A",
+                                Branch: r.branch || "-",
+                                Moviename: r.moviename || "N/A",
+                                No: r.seat_no || "-",
+                                Showtime: r.showtime || "-",
+                                Seat: Number(r.seat_count || 1)
+                            }));
+
+                            const cloudFileObj = {
+                                id: 'file-cloud-supabase',
+                                fileName: 'ฐานข้อมูล Cloud (Supabase)',
+                                uploadTime: new Date().toLocaleTimeString('th-TH', { hour: '2-digit', minute: '2-digit' }),
+                                recordCount: mappedLogs.length,
+                                enabled: true,
+                                data: mappedLogs
+                            };
+
+                            setFileList(prev => {
+                                const filtered = prev.filter(f => f.id !== 'file-cloud-supabase');
+                                return [cloudFileObj, ...filtered];
+                            });
+
+                            showNotification(`ดึงข้อมูลจาก Cloud สำเร็จ (${mappedLogs.length} รายการ)`, 'success');
+                        }
+                    }
+                    setCloudStatus('online');
+                } catch (err) {
+                    setCloudStatus('offline');
+                }
+            };
+
+            useEffect(() => {
+                if (isAuthenticated) {
+                    fetchCloudData();
+                }
+            }, [isAuthenticated]);
+
+            const saveLogsToCloud = async () => {
+                if (activeRawData.length === 0) {
+                    showNotification('ไม่มีข้อมูลสำหรับบันทึกลง Cloud', 'warning');
+                    return;
+                }
+
+                try {
+                    setIsSyncingCloud(true);
+                    const payload = activeRawData.slice(0, 100).map(d => ({
+                        barcode: cleanBarcode(d.Barcode),
+                        staff_name: d.StaffName,
+                        depart: d.Depart,
+                        level: d.Level,
+                        branch: d.Branch,
+                        moviename: d.Moviename,
+                        seat_no: d.No,
+                        seat_count: Number(d.Seat || 1),
+                        claim_datetime: parseThaiCustomDate(d.Datetime) ? parseThaiCustomDate(d.Datetime).toISOString() : new Date().toISOString()
+                    }));
+
+                    const res = await fetch(`${WORKER_API_URL}/api/welfare-logs`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    const json = await res.json();
+                    if (res.ok && json.success) {
+                        showNotification('บันทึกข้อมูลลง Supabase สำเร็จ!', 'success');
+                        fetchCloudData();
+                    } else {
+                        showNotification(`บันทึกไม่สำเร็จ: ${json.error?.message || json.error || 'เกิดข้อผิดพลาด'}`, 'error');
+                    }
+                } catch (err) {
+                    showNotification('ไม่สามารถเชื่อมต่อกับ Cloudflare Worker ได้', 'error');
+                } finally {
+                    setIsSyncingCloud(false);
+                }
             };
 
             const handleFileUpload = (e) => {
@@ -374,11 +455,12 @@
             };
 
             const removeFile = (id) => {
-                if (fileList.length <= 1) {
-                    showNotification('ต้องมีอย่างน้อย 1 ชุดข้อมูลในระบบ', 'warning');
-                    return;
-                }
                 setFileList(prev => prev.filter(f => f.id !== id));
+            };
+
+            const clearAllData = () => {
+                setFileList([]);
+                showNotification('ล้างข้อมูลทั้งหมดในระบบเรียบร้อยแล้ว', 'info');
             };
 
             const toggleBranchSelection = (branchName) => {
@@ -426,6 +508,22 @@
                 return fileList.filter(f => f.enabled).flatMap(f => f.data);
             }, [fileList]);
 
+            const departmentsList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => d.Depart).filter(Boolean));
+                return Array.from(set).sort();
+            }, [activeRawData]);
+
+            const branchesList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => d.Branch).filter(Boolean));
+                return Array.from(set).sort();
+            }, [activeRawData]);
+
+            const levelsList = useMemo(() => {
+                const set = new Set(activeRawData.map(d => String(d.Level || "").toUpperCase()).filter(Boolean));
+                levelRules.forEach(r => set.add(r.levelCode.toUpperCase()));
+                return Array.from(set).sort();
+            }, [activeRawData, levelRules]);
+
             const dateFilteredData = useMemo(() => {
                 return activeRawData.filter(item => {
                     const dt = parseThaiCustomDate(item.Datetime);
@@ -443,38 +541,19 @@
                 });
             }, [activeRawData, startDate, endDate]);
 
-            // Requirement 1: Movies list reference strictly based on dateFilteredData
             const moviesList = useMemo(() => {
                 const set = new Set(dateFilteredData.map(d => d.Moviename).filter(Boolean));
                 return Array.from(set).sort();
             }, [dateFilteredData]);
 
-            // Reset selected movie if it's no longer available in the date range
             useEffect(() => {
                 if (selectedMovie !== "ALL" && !moviesList.includes(selectedMovie)) {
                     setSelectedMovie("ALL");
                 }
             }, [moviesList, selectedMovie]);
 
-            const departmentsList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Depart).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            const branchesList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => d.Branch).filter(Boolean));
-                return Array.from(set).sort();
-            }, [activeRawData]);
-
-            const levelsList = useMemo(() => {
-                const set = new Set(activeRawData.map(d => String(d.Level || "").toUpperCase()).filter(Boolean));
-                levelRules.forEach(r => set.add(r.levelCode.toUpperCase()));
-                return Array.from(set).sort();
-            }, [activeRawData, levelRules]);
-
             const filteredData = useMemo(() => {
                 return activeRawData.filter(item => {
-                    // Search term filter
                     if (searchTerm) {
                         const term = searchTerm.toLowerCase();
                         const matchName = String(item.StaffName || "").toLowerCase().includes(term);
@@ -482,28 +561,12 @@
                         const matchMovie = String(item.Moviename || "").toLowerCase().includes(term);
                         if (!matchName && !matchCode && !matchMovie) return false;
                     }
-
-                    // Requirement 2: Multi-select Department Filter
-                    if (selectedDeparts.length > 0 && !selectedDeparts.includes(item.Depart)) {
-                        return false;
-                    }
-
-                    // Requirement 2: Multi-select Level Filter
-                    if (selectedLevels.length > 0 && !selectedLevels.includes(String(item.Level || "").toUpperCase())) {
-                        return false;
-                    }
-
-                    // Multi-select Branch Filter
-                    if (selectedBranches.length > 0 && !selectedBranches.includes(item.Branch)) {
-                        return false;
-                    }
-
-                    // Movie Filter
-                    if (selectedMovie !== "ALL" && item.Moviename !== selectedMovie) {
-                        return false;
-                    }
-
-                    // Date Filters
+                    
+                    if (selectedLevels.length > 0 && !selectedLevels.includes(String(item.Level || "").toUpperCase())) return false;
+                    if (selectedDeparts.length > 0 && !selectedDeparts.includes(item.Depart)) return false;
+                    if (selectedBranches.length > 0 && !selectedBranches.includes(item.Branch)) return false;
+                    if (selectedMovie !== "ALL" && item.Moviename !== selectedMovie) return false;
+                    
                     const dt = parseThaiCustomDate(item.Datetime);
                     if (startDate && dt) {
                         const s = new Date(startDate);
@@ -517,7 +580,7 @@
                     }
                     return true;
                 });
-            }, [activeRawData, searchTerm, selectedDeparts, selectedLevels, selectedBranches, selectedMovie, startDate, endDate]);
+            }, [activeRawData, searchTerm, selectedLevels, selectedDeparts, selectedBranches, selectedMovie, startDate, endDate]);
 
             const auditSummary = useMemo(() => {
                 const map = {};
@@ -575,8 +638,6 @@
                     }
                 });
                 
-                const activeUsersSet = new Set(filteredData.map(d => cleanBarcode(d.Barcode)).filter(Boolean));
-                
                 let eligibleEmployees = Array.from(totalActiveEmployeesMap.values());
                 if (selectedDeparts.length > 0) {
                     eligibleEmployees = eligibleEmployees.filter(e => selectedDeparts.includes(e.Depart));
@@ -589,9 +650,6 @@
                 }
 
                 const totalEligibleCount = eligibleEmployees.length || totalActiveEmployeesMap.size;
-                const usedCount = activeUsersSet.size;
-                const unusedCount = Math.max(0, totalEligibleCount - usedCount);
-
                 const totalSeatsUsed = filteredData.reduce((acc, curr) => acc + Number(curr.Seat || 1), 0);
                 
                 let totalAllocatedQuota = 0;
@@ -607,49 +665,18 @@
                 const unusedQuota = Math.max(0, totalAllocatedQuota - totalSeatsUsed);
                 const utilizationRate = totalAllocatedQuota > 0 ? ((totalSeatsUsed / totalAllocatedQuota) * 100).toFixed(1) : 0;
 
-                // Org Coverage metrics
-                const departMap = {};
-                const branchSet = new Set();
-                filteredData.forEach(d => {
-                    const dep = d.Depart || "ไม่ระบุ";
-                    const br = d.Branch || "ไม่ระบุ";
-                    const seats = Number(d.Seat || 1);
-                    departMap[dep] = (departMap[dep] || 0) + seats;
-                    branchSet.add(br);
-                });
-
-                const activeDepartsCount = Object.keys(departMap).length;
-                const activeBranchesCount = branchSet.size;
-
-                let topDepartmentName = "-";
-                let topDepartmentSeats = 0;
-                let topDepartmentPercent = "0";
-
-                Object.entries(departMap).forEach(([dep, seats]) => {
-                    if (seats > topDepartmentSeats) {
-                        topDepartmentSeats = seats;
-                        topDepartmentName = dep;
-                    }
-                });
-
-                if (totalSeatsUsed > 0 && topDepartmentSeats > 0) {
-                    topDepartmentPercent = ((topDepartmentSeats / totalSeatsUsed) * 100).toFixed(1);
-                }
+                const uniqueDepartsCount = new Set(filteredData.map(d => d.Depart).filter(Boolean)).size;
+                const uniqueBranchesCount = new Set(filteredData.map(d => d.Branch).filter(Boolean)).size;
 
                 return {
                     totalClaims: filteredData.length,
                     totalSeatsUsed,
-                    totalEligibleCount,
-                    usedCount,
-                    unusedCount,
-                    totalAllocatedQuota,
                     unusedQuota,
+                    totalEligibleCount,
+                    totalAllocatedQuota,
                     utilizationRate: Math.min(100, Number(utilizationRate)),
-                    activeDepartsCount,
-                    activeBranchesCount,
-                    topDepartmentName,
-                    topDepartmentSeats,
-                    topDepartmentPercent
+                    uniqueDepartsCount,
+                    uniqueBranchesCount
                 };
             }, [filteredData, activeRawData, levelRules, selectedDeparts, selectedLevels, selectedBranches]);
 
@@ -754,6 +781,29 @@
                 exportToExcel(exportData, "Welfare_Claim_Logs", "Logs");
             };
 
+            const exportEmployeesMasterToExcel = () => {
+                const uniqueMap = new Map();
+                activeRawData.forEach(d => {
+                    const bc = cleanBarcode(d.Barcode);
+                    if (bc && !uniqueMap.has(bc)) {
+                        uniqueMap.set(bc, {
+                            Barcode: bc,
+                            StaffName: d.StaffName || "N/A",
+                            Depart: d.Depart || "-",
+                            Level: d.Level || "-",
+                            Branch: d.Branch || "-"
+                        });
+                    }
+                });
+
+                const dataList = Array.from(uniqueMap.values());
+                if (dataList.length === 0) {
+                    showNotification('ไม่พบข้อมูลรายชื่อพนักงานสำหรับ Export', 'warning');
+                    return;
+                }
+                exportToExcel(dataList, "Employee_Master_List", "Employees");
+            };
+
             const exportAuditToExcel = () => {
                 const exportData = auditSummary.map((a, i) => ({
                     No: i + 1,
@@ -776,6 +826,70 @@
                 return filteredData.slice(start, start + itemsPerPage);
             }, [filteredData, currentPage, itemsPerPage]);
 
+            if (!isAuthenticated) {
+                return (
+                    <div className="min-h-screen bg-slate-950 flex items-center justify-center p-4">
+                        {toast.show && (
+                            <div className={`fixed top-4 right-4 z-50 px-4 py-3 rounded-xl shadow-2xl border text-xs font-semibold flex items-center gap-2 transition-all duration-300 ${
+                                toast.type === 'success' ? 'bg-emerald-950 border-emerald-500/50 text-emerald-200' :
+                                toast.type === 'error' ? 'bg-rose-950 border-rose-500/50 text-rose-200' :
+                                toast.type === 'warning' ? 'bg-amber-950 border-amber-500/50 text-amber-200' :
+                                'bg-indigo-950 border-indigo-500/50 text-indigo-200'
+                            }`}>
+                                <span>{toast.type === 'success' ? '✅' : toast.type === 'error' ? '❌' : toast.type === 'warning' ? '⚠️' : 'ℹ️'}</span>
+                                <span>{toast.message}</span>
+                            </div>
+                        )}
+
+                        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 max-w-md w-full shadow-2xl space-y-6 relative overflow-hidden">
+                            <div className="absolute -top-12 -right-12 w-32 h-32 bg-indigo-600/10 rounded-full blur-2xl"></div>
+                            
+                            <div className="text-center space-y-2">
+                                <div className="inline-flex p-3 bg-indigo-600/20 text-indigo-400 rounded-2xl mb-2 text-2xl border border-indigo-500/30">
+                                    🔒
+                                </div>
+                                <h2 className="text-xl font-bold text-white tracking-wide">เข้าสู่ระบบหลังบ้าน</h2>
+                                <p className="text-xs text-slate-400">ระบบบริหารและวิเคราะห์สวัสดิการพนักงาน</p>
+                            </div>
+
+                            <form onSubmit={handleLogin} className="space-y-4">
+                                <div>
+                                    <label className="block text-xs font-semibold text-slate-300 mb-1">
+                                        🔑 รหัสผ่านผู้ดูแลระบบ (Admin Passcode)
+                                    </label>
+                                    <input 
+                                        type="password"
+                                        placeholder="กรอกรหัสผ่าน..."
+                                        value={passcode}
+                                        onChange={(e) => setPasscode(e.target.value)}
+                                        className="w-full bg-slate-950 border border-slate-700 rounded-xl p-3 text-sm text-white focus:outline-none focus:border-indigo-500 transition"
+                                        autoFocus
+                                    />
+                                </div>
+
+                                <button
+                                    type="submit"
+                                    disabled={isLoggingIn}
+                                    className="w-full py-3 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white font-semibold rounded-xl text-xs transition shadow-lg shadow-indigo-600/20 flex items-center justify-center gap-2"
+                                >
+                                    {isLoggingIn ? (
+                                        <span>กำลังตรวจสอบรหัสผ่าน...</span>
+                                    ) : (
+                                        <span>เข้าสู่ระบบ (Login)</span>
+                                    )}
+                                </button>
+                            </form>
+
+                            <div className="text-center border-t border-slate-800/80 pt-4">
+                                <p className="text-[11px] text-slate-500">
+                                    🛡️ ระบบล็อกอินป้องกันข้อมูลหลุด ตรวจสอบผ่าน Cloudflare Edge Security
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                );
+            }
+
             return (
                 <div className="min-h-screen pb-12 flex flex-col">
                     {toast.show && (
@@ -797,7 +911,16 @@
                                     🎬
                                 </div>
                                 <div>
-                                    <h1 className="text-lg font-bold text-white tracking-wide">ระบบบริหารและวิเคราะห์สวัสดิการพนักงาน</h1>
+                                    <div className="flex items-center gap-2">
+                                        <h1 className="text-lg font-bold text-white tracking-wide">ระบบบริหารและวิเคราะห์สวัสดิการพนักงาน</h1>
+                                        <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${
+                                            cloudStatus === 'online' ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30' :
+                                            cloudStatus === 'offline' ? 'bg-rose-500/10 text-rose-400 border-rose-500/30' :
+                                            'bg-amber-500/10 text-amber-400 border-amber-500/30'
+                                        }`}>
+                                            {cloudStatus === 'online' ? '🟢 Cloud Online' : cloudStatus === 'offline' ? '🔴 Cloud Offline' : '🟡 Connecting...'}
+                                        </span>
+                                    </div>
                                     <p className="text-xs text-slate-400">Employee Welfare Analytics & Entitlement Tracking System</p>
                                 </div>
                             </div>
@@ -835,11 +958,18 @@
                                         📸 รายงานผู้บริหาร
                                     </button>
                                 </div>
+
+                                <button
+                                    onClick={handleLogout}
+                                    className="px-3 py-1.5 bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 rounded-xl text-xs font-semibold transition flex items-center gap-1"
+                                    title="ออกจากระบบ"
+                                >
+                                    <span>🔒 ออกจากระบบ</span>
+                                </button>
                             </div>
                         </div>
                     </header>
 
-                    {}
                     <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 mt-6 flex-1 w-full">
                         <div className="bg-slate-800 rounded-xl p-4 border border-slate-700 mb-6 space-y-4 shadow-lg">
                             <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 border-b border-slate-700/60 pb-3">
@@ -849,6 +979,14 @@
                                         <span>{isUploading ? 'กำลังโหลด...' : '➕ แนบไฟล์ Excel เพิ่ม'}</span>
                                         <input type="file" accept=".xlsx, .xls, .csv" className="hidden" onChange={handleFileUpload} />
                                     </label>
+
+                                    <button 
+                                        onClick={saveLogsToCloud}
+                                        disabled={isSyncingCloud || activeRawData.length === 0}
+                                        className="px-3 py-2 bg-indigo-600 hover:bg-indigo-500 disabled:opacity-50 text-white text-xs font-semibold rounded-lg transition shadow flex items-center gap-1.5"
+                                    >
+                                        <span>☁️ {isSyncingCloud ? 'กำลังซิงค์...' : 'บันทึกลง Cloud (Supabase)'}</span>
+                                    </button>
 
                                     <button 
                                         onClick={() => setShowFileManager(!showFileManager)}
@@ -873,7 +1011,7 @@
                                 </button>
                             </div>
 
-                            {/* Filters Bar with Excel-like Multi-Select Level & Department */}
+                            {/* Filters Bar with Excel-like Multi-Select */}
                             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-7 gap-3">
                                 <div className="lg:col-span-1">
                                     <label className="block text-[11px] font-semibold text-slate-400 mb-1">🔍 ค้นหา พนักงาน/Barcode</label>
@@ -886,39 +1024,30 @@
                                     />
                                 </div>
 
-                                {/* Multi-Select Level */}
-                                <div>
-                                    <MultiSelectDropdown
-                                        label="🏷️ ระดับตำแหน่ง (Level)"
-                                        options={levelsList}
-                                        selectedValues={selectedLevels}
-                                        onChange={(vals) => { setSelectedLevels(vals); setCurrentPage(1); }}
-                                        placeholder="ทุก Level"
-                                    />
-                                </div>
+                                <MultiSelectDropdown
+                                    title="🏷️ ระดับตำแหน่ง (Level)"
+                                    options={levelsList}
+                                    selected={selectedLevels}
+                                    onChange={(vals) => { setSelectedLevels(vals); setCurrentPage(1); }}
+                                    placeholder="ทุก Level (All)"
+                                />
 
-                                {/* Multi-Select Department */}
-                                <div>
-                                    <MultiSelectDropdown
-                                        label="🏢 แผนก (Department)"
-                                        options={departmentsList}
-                                        selectedValues={selectedDeparts}
-                                        onChange={(vals) => { setSelectedDeparts(vals); setCurrentPage(1); }}
-                                        placeholder="ทุกแผนก"
-                                    />
-                                </div>
+                                <MultiSelectDropdown
+                                    title="🏢 แผนก (Department)"
+                                    options={departmentsList}
+                                    selected={selectedDeparts}
+                                    onChange={(vals) => { setSelectedDeparts(vals); setCurrentPage(1); }}
+                                    placeholder="ทุกแผนก (All)"
+                                />
 
-                                {/* Movie Filter referenced strictly to Date Filtered Range */}
                                 <div>
-                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">
-                                        🎬 สวัสดิการ/ภาพยนตร์ {startDate || endDate ? "(ตามช่วงวัน)" : ""}
-                                    </label>
+                                    <label className="block text-[11px] font-semibold text-slate-400 mb-1">🎬 สวัสดิการ/ภาพยนตร์</label>
                                     <select
                                         value={selectedMovie}
                                         onChange={(e) => { setSelectedMovie(e.target.value); setCurrentPage(1); }}
-                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500 font-medium"
+                                        className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-indigo-500"
                                     >
-                                        <option value="ALL">ทุกเรื่อง ({moviesList.length} เรื่องในระบบ)</option>
+                                        <option value="ALL">ทุกเรื่อง ({moviesList.length} รายการ)</option>
                                         {moviesList.map(m => <option key={m} value={m}>{m}</option>)}
                                     </select>
                                 </div>
@@ -954,7 +1083,7 @@
                                     <button
                                         onClick={handleResetDateFilters}
                                         className="px-2.5 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 text-xs font-semibold rounded-lg transition border border-slate-600"
-                                        title="รีเซ็ตวันที่"
+                                        title="รีเซ็ตวันที่เป็นค่าเริ่มต้น"
                                     >
                                         🔄
                                     </button>
@@ -1017,37 +1146,56 @@
                                         <span>📂 รายการชุดข้อมูลในระบบ</span>
                                         <span className="text-xs font-normal text-slate-400">(เปิด/ปิด เพื่อเลือกวิเคราะห์เฉพาะไฟล์ที่ต้องการ)</span>
                                     </h3>
-                                    <button onClick={() => setShowFileManager(false)} className="text-slate-400 hover:text-white text-xs">✕ ปิด</button>
+                                    <div className="flex items-center gap-2">
+                                        <button 
+                                            onClick={exportEmployeesMasterToExcel}
+                                            className="px-2.5 py-1 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold rounded transition"
+                                        >
+                                            📥 Export รายชื่อพนักงาน
+                                        </button>
+                                        <button 
+                                            onClick={clearAllData}
+                                            className="px-2.5 py-1 bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold rounded transition"
+                                        >
+                                            🗑️ ลบข้อมูลทั้งหมด
+                                        </button>
+                                        <button onClick={() => setShowFileManager(false)} className="text-slate-400 hover:text-white text-xs ml-2">✕ ปิด</button>
+                                    </div>
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                                    {fileList.map(file => (
-                                        <div key={file.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${file.enabled ? 'bg-slate-900 border-indigo-500/50' : 'bg-slate-900/40 border-slate-800 opacity-60'}`}>
-                                            <div className="overflow-hidden">
-                                                <p className="text-xs font-semibold text-white truncate">{file.fileName}</p>
-                                                <p className="text-[11px] text-slate-400">{file.recordCount} รายการ • อัปโหลด {file.uploadTime}</p>
-                                            </div>
-                                            <div className="flex items-center gap-2 shrink-0">
-                                                <input 
-                                                    type="checkbox"
-                                                    checked={file.enabled}
-                                                    onChange={() => toggleFileEnabled(file.id)}
-                                                    className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
-                                                />
-                                                <button 
-                                                    onClick={() => removeFile(file.id)}
-                                                    className="p-1 text-rose-400 hover:bg-rose-500/20 rounded transition text-xs"
-                                                    title="ลบไฟล์"
-                                                >
-                                                    🗑️
-                                                </button>
-                                            </div>
+                                    {fileList.length === 0 ? (
+                                        <div className="col-span-3 text-center py-4 text-slate-500 text-xs">
+                                            ยังไม่มีชุดข้อมูลในระบบ สามารถกด "แนบไฟล์ Excel เพิ่ม" หรือดึงข้อมูลจาก Cloud ได้
                                         </div>
-                                    ))}
+                                    ) : (
+                                        fileList.map(file => (
+                                            <div key={file.id} className={`p-3 rounded-xl border flex items-center justify-between gap-3 ${file.enabled ? 'bg-slate-900 border-indigo-500/50' : 'bg-slate-900/40 border-slate-800 opacity-60'}`}>
+                                                <div className="overflow-hidden">
+                                                    <p className="text-xs font-semibold text-white truncate">{file.fileName}</p>
+                                                    <p className="text-[11px] text-slate-400">{file.recordCount} รายการ • อัปโหลด {file.uploadTime}</p>
+                                                </div>
+                                                <div className="flex items-center gap-2 shrink-0">
+                                                    <input 
+                                                        type="checkbox"
+                                                        checked={file.enabled}
+                                                        onChange={() => toggleFileEnabled(file.id)}
+                                                        className="w-4 h-4 accent-indigo-600 rounded cursor-pointer"
+                                                    />
+                                                    <button 
+                                                        onClick={() => removeFile(file.id)}
+                                                        className="p-1 text-rose-400 hover:bg-rose-500/20 rounded transition text-xs"
+                                                        title="ลบไฟล์"
+                                                    >
+                                                        🗑️
+                                                    </button>
+                                                </div>
+                                            </div>
+                                        ))
+                                    )}
                                 </div>
                             </div>
                         )}
 
-                        {}
                         {activeTab === "dashboard" && (
                             <div className="space-y-6">
                                 {/* Enhanced Key Analytics Cards */}
@@ -1068,34 +1216,29 @@
                                             <span>📈 อัตราการใช้สิทธิ์ (%)</span>
                                             <span className="text-[10px] bg-emerald-500/20 text-emerald-300 px-2 py-0.5 rounded-full font-mono">Utilization Rate</span>
                                         </div>
-                                        <div className="flex items-baseline gap-2 mt-1">
-                                            <span className="text-2xl font-bold text-emerald-400">{analyticsKPIs.utilizationRate}%</span>
-                                            <span className="text-[11px] text-slate-400">
-                                                (จากโควตารวม {analyticsKPIs.totalAllocatedQuota.toLocaleString()} ที่นั่ง)
-                                            </span>
+                                        <div className="text-2xl font-bold text-emerald-400 mt-1">
+                                            {analyticsKPIs.utilizationRate}%
                                         </div>
                                         <div className="w-full bg-slate-700 h-2 rounded-full mt-2 overflow-hidden">
                                             <div className="bg-emerald-500 h-full rounded-full transition-all duration-500" style={{ width: `${Math.min(100, analyticsKPIs.utilizationRate)}%` }}></div>
                                         </div>
-                                        <div className="flex items-center justify-between text-[11px] mt-2 pt-1.5 border-t border-slate-700/60">
-                                            <span className="text-slate-300">ใช้แล้ว: <strong className="text-emerald-400 font-bold">{analyticsKPIs.totalSeatsUsed.toLocaleString()}</strong> ที่นั่ง</span>
-                                            <span className="text-slate-300">ยังไม่ใช้: <strong className="text-amber-400 font-bold">{analyticsKPIs.unusedQuota.toLocaleString()}</strong> ที่นั่ง</span>
+                                        <div className="flex items-center justify-between text-[11px] text-slate-400 mt-1.5">
+                                            <span>ใช้แล้ว: <strong className="text-emerald-400">{analyticsKPIs.totalSeatsUsed.toLocaleString()}</strong> ที่นั่ง</span>
+                                            <span>คงเหลือ: <strong className="text-amber-400">{analyticsKPIs.unusedQuota.toLocaleString()}</strong> ที่นั่ง</span>
                                         </div>
                                     </div>
 
+                                    {/* Org Coverage KPI Card */}
                                     <div className="bg-slate-800 border border-slate-700 p-4 rounded-xl shadow-md relative overflow-hidden">
                                         <div className="text-xs text-slate-400 font-semibold mb-1 flex items-center justify-between">
                                             <span>🏢 การครอบคลุมระดับแผนก/สาขา</span>
                                             <span className="text-[10px] bg-cyan-500/20 text-cyan-300 px-2 py-0.5 rounded-full font-mono">Org Coverage</span>
                                         </div>
-                                        <div className="text-2xl font-bold text-white mt-1">
-                                            {analyticsKPIs.activeDepartsCount} <span className="text-xs font-normal text-slate-400">แผนก /</span> {analyticsKPIs.activeBranchesCount} <span className="text-xs font-normal text-slate-400">สาขา</span>
+                                        <div className="text-2xl font-bold text-cyan-400 mt-1">
+                                            {analyticsKPIs.uniqueDepartsCount} <span className="text-xs font-normal text-slate-300">แผนก</span> / {analyticsKPIs.uniqueBranchesCount} <span className="text-xs font-normal text-slate-300">สาขา</span>
                                         </div>
-                                        <div className="text-[11px] text-slate-300 mt-2 truncate">
-                                            แผนกใช้สูงสุด: <strong className="text-cyan-400 font-bold">{analyticsKPIs.topDepartmentName}</strong> <span className="text-slate-400">({analyticsKPIs.topDepartmentPercent}%)</span>
-                                        </div>
-                                        <p className="text-[11px] text-slate-400 mt-1">
-                                            ที่มีการแลกเบิกสิทธิ์ภาพยนตร์ในระบบ
+                                        <p className="text-[11px] text-slate-400 mt-2 truncate">
+                                            แผนกใช้สูงสุด: <strong className="text-indigo-300">{chartDepartData.length > 0 ? chartDepartData[0].name : '-'}</strong> ({chartDepartData.length > 0 && analyticsKPIs.totalSeatsUsed > 0 ? ((chartDepartData[0].seats / analyticsKPIs.totalSeatsUsed) * 100).toFixed(0) : 0}%)
                                         </p>
                                     </div>
 
@@ -1156,6 +1299,7 @@
                                     </div>
                                 </div>
 
+                                {/* Breakdown Charts */}
                                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                                     {/* Breakdown by Level */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md">
@@ -1208,7 +1352,7 @@
                                         </div>
                                     </div>
 
-                                    {/* Breakdown by Movie / Welfare Type */}
+                                    {/* Top Movies */}
                                     <div className="bg-slate-800 border border-slate-700 p-5 rounded-xl shadow-md flex flex-col justify-between">
                                         <div>
                                             <h3 className="text-sm font-bold text-white mb-4 flex items-center gap-2">
@@ -1231,7 +1375,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === "audit" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -1317,7 +1460,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === "logs" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 border-b border-slate-700 pb-3">
@@ -1403,7 +1545,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === "rules" && (
                             <div className="bg-slate-800 border border-slate-700 rounded-xl p-5 shadow-lg space-y-4">
                                 <div>
@@ -1438,7 +1579,6 @@
                             </div>
                         )}
 
-                        {}
                         {activeTab === "executive" && (
                             <div className="bg-slate-900 border border-indigo-500/50 rounded-2xl p-6 shadow-2xl space-y-6">
                                 <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-slate-800 pb-4">
@@ -1473,17 +1613,15 @@
                                         <div className="text-2xl font-bold text-white">{filteredData.length.toLocaleString()} ครั้ง</div>
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
-                                        <div className="text-xs text-slate-400 font-semibold mb-1">💺 จำนวนที่นั่งรวมที่ใช้</div>
+                                        <div className="text-xs text-slate-400 font-semibold mb-1">💺 จำนวนที่นั่งรวมที่ใช้ / คงเหลือ</div>
                                         <div className="text-2xl font-bold text-emerald-400">
-                                            {analyticsKPIs.totalSeatsUsed.toLocaleString()} ที่นั่ง
+                                            {analyticsKPIs.totalSeatsUsed.toLocaleString()} <span className="text-xs font-normal text-slate-400">ที่นั่ง</span>
                                         </div>
+                                        <p className="text-[11px] text-amber-400 mt-1">คงเหลือ: {analyticsKPIs.unusedQuota.toLocaleString()} ที่นั่ง</p>
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">📈 อัตราการใช้สิทธิ์ (%)</div>
                                         <div className="text-2xl font-bold text-indigo-400">{analyticsKPIs.utilizationRate}%</div>
-                                        <p className="text-[11px] text-slate-400 mt-1">
-                                            ใช้ไป {analyticsKPIs.totalSeatsUsed.toLocaleString()} / คงเหลือ {analyticsKPIs.unusedQuota.toLocaleString()} ที่นั่ง
-                                        </p>
                                     </div>
                                     <div className="bg-slate-800/90 border border-slate-700 p-4 rounded-xl shadow">
                                         <div className="text-xs text-slate-400 font-semibold mb-1">⚠️ เกินโควตา (รายเดือน)</div>
